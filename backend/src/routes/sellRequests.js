@@ -36,6 +36,9 @@ router.post(
     if (missing.length) {
       return res.status(400).json({ error: `Missing required field(s): ${missing.join(', ')}.` });
     }
+    if (!Array.isArray(body.media) || body.media.length === 0) {
+      return res.status(400).json({ error: 'At least one photo/video is required in media.' });
+    }
 
     // Best-effort: geocode the submitted address so approval can broadcast
     // to nearby agents (see models/sellRequests.js#approveSubmission). A

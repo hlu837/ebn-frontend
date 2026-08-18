@@ -128,7 +128,7 @@ async function create({
 }
 
 function findById(id) {
-  return query(`SELECT * FROM order_requests WHERE id = $1`, [id]).then((r) => r.rows[0] || null);
+  return query(`SELECT * FROM order_requests WHERE id = $1::uuid`, [id]).then((r) => r.rows[0] || null);
 }
 
 function listByRequester(requesterUserId) {
@@ -139,12 +139,22 @@ function listByRequester(requesterUserId) {
 }
 
 // ── Agent ────────────────────────────────────────────────────────────────
-/** Broadcasting requests this agent was notified about and hasn't lost to someone else. */
+/** Broadcasting requests this agent was notified about (or general broadcasts) and hasn't lost to someone else. */
 function listBroadcastingForAgent(agentId) {
   return query(
     `SELECT * FROM order_requests
-     WHERE status = 'broadcasting'::order_request_status AND $1 = ANY(broadcast_agent_ids)
-     ORDER BY created_at ASC`,
+     WHERE status = 'broadcasting'::order_request_status
+       AND (
+         broadcast_agent_ids IS NULL
+         OR array_length(broadcast_agent_ids, 1) IS NULL
+         OR array_length(broadcast_agent_ids, 1) = 0
+         OR $1::text = ANY(broadcast_agent_ids)
+       )
+       AND (
+         excluded_agent_ids IS NULL
+         OR NOT ($1::text = ANY(excluded_agent_ids))
+       )
+     ORDER BY created_at DESC`,
     [agentId]
   ).then((r) => r.rows);
 }
@@ -152,28 +162,39 @@ function listBroadcastingForAgent(agentId) {
 /** Everything this agent currently has (or has had) assigned to them. */
 function listAssignedToAgent(agentId) {
   return query(
-    `SELECT * FROM order_requests WHERE assigned_agent_id = $1 ORDER BY created_at DESC`,
+    `SELECT * FROM order_requests WHERE assigned_agent_id = $1::uuid ORDER BY created_at DESC`,
     [agentId]
   ).then((r) => r.rows);
 }
 
 /**
  * First agent to claim wins — atomic: only succeeds if the request is
- * still `broadcasting` AND this agent was actually one it was sent to.
+ * still `broadcasting` and this agent is not excluded.
  */
 function claim(id, { agentId, agentName, agentPhone }) {
+  // $2 = agentId as UUID (for assigned_agent_id column)
+  // $5 = agentId as TEXT (for TEXT[] array comparisons — same value, different type binding)
   return query(
     `UPDATE order_requests
      SET status = 'agent_confirmed'::order_request_status,
-         assigned_agent_id = $2,
+         assigned_agent_id = $2::uuid,
          assigned_agent_name = $3,
          assigned_agent_phone = $4,
          confirmed_at = now()
-     WHERE id = $1
+     WHERE id = $1::uuid
        AND status = 'broadcasting'::order_request_status
-       AND $2 = ANY(broadcast_agent_ids)
+       AND (
+         broadcast_agent_ids IS NULL
+         OR array_length(broadcast_agent_ids, 1) IS NULL
+         OR array_length(broadcast_agent_ids, 1) = 0
+         OR $5::text = ANY(broadcast_agent_ids)
+       )
+       AND (
+         excluded_agent_ids IS NULL
+         OR NOT ($5::text = ANY(excluded_agent_ids))
+       )
      RETURNING *`,
-    [id, agentId, agentName, agentPhone]
+    [id, agentId, agentName, agentPhone, agentId]
   ).then((r) => r.rows[0] || null);
 }
 
@@ -186,9 +207,9 @@ function complete(id, { agentId }) {
   return query(
     `UPDATE order_requests
      SET status = 'closed'::order_request_status
-     WHERE id = $1
+     WHERE id = $1::uuid
        AND status = 'agent_confirmed'::order_request_status
-       AND assigned_agent_id = $2
+       AND assigned_agent_id = $2::uuid
      RETURNING *`,
     [id, agentId]
   ).then((r) => r.rows[0] || null);
@@ -200,7 +221,7 @@ function report(id, { requesterUserId, reason }) {
   return query(
     `UPDATE order_requests
      SET status = 'disputed'::order_request_status, dispute_reason = $3
-     WHERE id = $1 AND requester_user_id = $2 AND status = 'agent_confirmed'::order_request_status
+     WHERE id = $1::uuid AND requester_user_id = $2 AND status = 'agent_confirmed'::order_request_status
      RETURNING *`,
     [id, requesterUserId, reason || null]
   ).then((r) => r.rows[0] || null);
@@ -219,7 +240,7 @@ function reportByAgent(id, { agentId, reason }) {
   return query(
     `UPDATE order_requests
      SET status = 'disputed'::order_request_status, dispute_reason = $3
-     WHERE id = $1 AND assigned_agent_id = $2 AND status = 'agent_confirmed'::order_request_status
+     WHERE id = $1::uuid AND assigned_agent_id = $2::uuid AND status = 'agent_confirmed'::order_request_status
      RETURNING *`,
     [id, agentId, reason || null]
   ).then((r) => r.rows[0] || null);

@@ -106,14 +106,15 @@ function create({
   houseDetails,
   vehicleDetails,
   machineryDetails,
+  media,
 }) {
   return query(
     `INSERT INTO sell_requests (
        owner_user_id, owner_name, owner_phone, category, title, description,
        asking_price, city, address_line, latitude, longitude, fee_amount, fee_paid,
-       house_details, vehicle_details, machinery_details
+       house_details, vehicle_details, machinery_details, report_media
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb)
      RETURNING *`,
     [
       ownerUserId,
@@ -132,6 +133,7 @@ function create({
       houseDetails ? JSON.stringify(houseDetails) : null,
       vehicleDetails ? JSON.stringify(vehicleDetails) : null,
       machineryDetails ? JSON.stringify(machineryDetails) : null,
+      JSON.stringify(media || []),
     ]
   ).then((r) => r.rows[0]);
 }

@@ -82,6 +82,16 @@ router.get(
   })
 );
 
+// GET /api/order-requests/:id -> get single order request by id
+router.get(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const row = await model.findById(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Order request not found.' });
+    res.json(model.toPublic(row));
+  })
+);
+
 // POST /api/order-requests/:id/report
 // Visitor reports that they and the assigned agent couldn't work it out.
 // Body: { requesterUserId, reason? }
@@ -129,11 +139,16 @@ router.post(
     if (!agentId || !agentName || !agentPhone) {
       return res.status(400).json({ error: 'agentId, agentName, and agentPhone are required.' });
     }
-    const row = await model.claim(req.params.id, { agentId, agentName, agentPhone });
-    if (!row) {
-      return res.status(409).json({ error: 'Someone else already claimed this request, or it is no longer available to you.' });
+    try {
+      const row = await model.claim(req.params.id, { agentId, agentName, agentPhone });
+      if (!row) {
+        return res.status(409).json({ error: 'Someone else already claimed this request, or it is no longer available to you.' });
+      }
+      res.json(model.toPublic(row));
+    } catch (err) {
+      console.error('[claim] SQL error:', err.message, err.code, 'position:', err.position);
+      res.status(500).json({ error: 'Internal server error.', detail: err.message });
     }
-    res.json(model.toPublic(row));
   })
 );
 
