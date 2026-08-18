@@ -38,6 +38,56 @@ async function notifyAgentsOfDispatch(orderRequestRow, agentIds) {
   );
 }
 
+/**
+ * Notifies the requester (the user who placed the order) when an agent claims their order request.
+ */
+async function notifyRequesterOfClaim(orderRequestRow) {
+  if (!orderRequestRow || !orderRequestRow.requester_user_id) return;
+  try {
+    const user = await usersModel.findById(orderRequestRow.requester_user_id).catch(() => null);
+    const recipientType = user && user.role ? user.role : 'user';
+
+    const notifRow = await notificationsModel.create({
+      recipientType,
+      recipientId: String(orderRequestRow.requester_user_id),
+      kind: 'system',
+      title: 'Order Request Claimed',
+      body: `Agent ${orderRequestRow.assigned_agent_name || 'an agent'} has claimed your order "${orderRequestRow.title}". Contact: ${orderRequestRow.assigned_agent_phone || 'N/A'}`,
+      relatedId: String(orderRequestRow.id),
+    });
+
+    broadcastNotification(recipientType, String(orderRequestRow.requester_user_id), notificationsModel.toPublic(notifRow));
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[orderRequests] failed to notify requester ${orderRequestRow.requester_user_id} of claim`, err);
+  }
+}
+
+/**
+ * Notifies the requester when their order request is marked as completed by the assigned agent.
+ */
+async function notifyRequesterOfComplete(orderRequestRow) {
+  if (!orderRequestRow || !orderRequestRow.requester_user_id) return;
+  try {
+    const user = await usersModel.findById(orderRequestRow.requester_user_id).catch(() => null);
+    const recipientType = user && user.role ? user.role : 'user';
+
+    const notifRow = await notificationsModel.create({
+      recipientType,
+      recipientId: String(orderRequestRow.requester_user_id),
+      kind: 'system',
+      title: 'Order Request Completed',
+      body: `Agent ${orderRequestRow.assigned_agent_name || 'an agent'} has marked your order "${orderRequestRow.title}" as completed.`,
+      relatedId: String(orderRequestRow.id),
+    });
+
+    broadcastNotification(recipientType, String(orderRequestRow.requester_user_id), notificationsModel.toPublic(notifRow));
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[orderRequests] failed to notify requester ${orderRequestRow.requester_user_id} of completion`, err);
+  }
+}
+
 /** Converts a DB row (snake_case) to the camelCase shape the client expects. */
 function toPublic(row) {
   if (!row) return null;
@@ -171,10 +221,10 @@ function listAssignedToAgent(agentId) {
  * First agent to claim wins — atomic: only succeeds if the request is
  * still `broadcasting` and this agent is not excluded.
  */
-function claim(id, { agentId, agentName, agentPhone }) {
+async function claim(id, { agentId, agentName, agentPhone }) {
   // $2 = agentId as UUID (for assigned_agent_id column)
   // $5 = agentId as TEXT (for TEXT[] array comparisons — same value, different type binding)
-  return query(
+  const row = await query(
     `UPDATE order_requests
      SET status = 'agent_confirmed'::order_request_status,
          assigned_agent_id = $2::uuid,
@@ -196,6 +246,12 @@ function claim(id, { agentId, agentName, agentPhone }) {
      RETURNING *`,
     [id, agentId, agentName, agentPhone, agentId]
   ).then((r) => r.rows[0] || null);
+
+  if (row) {
+    await notifyRequesterOfClaim(row);
+  }
+
+  return row;
 }
 
 /**
@@ -203,8 +259,8 @@ function claim(id, { agentId, agentName, agentPhone }) {
  * if the request is still `agent_confirmed` AND this agent is the one it's
  * assigned to (same guard pattern as [claim]).
  */
-function complete(id, { agentId }) {
-  return query(
+async function complete(id, { agentId }) {
+  const row = await query(
     `UPDATE order_requests
      SET status = 'closed'::order_request_status
      WHERE id = $1::uuid
@@ -213,6 +269,12 @@ function complete(id, { agentId }) {
      RETURNING *`,
     [id, agentId]
   ).then((r) => r.rows[0] || null);
+
+  if (row) {
+    await notifyRequesterOfComplete(row);
+  }
+
+  return row;
 }
 
 // ── Visitor: report a dispute ───────────────────────────────────────────

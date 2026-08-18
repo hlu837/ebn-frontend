@@ -24,10 +24,13 @@ function initSocket(httpServer, { corsOrigin }) {
     socket.on('join', ({ role, id } = {}) => {
       if (role === 'admin') {
         socket.join('admin');
-      } else if (role === 'customer' && id) {
+      } else if ((role === 'customer' || role === 'user') && id) {
         socket.join(`customer:${id}`);
+        socket.join(`user:${id}`);
       } else if (role === 'agent' && id) {
         socket.join(`agent:${id}`);
+      } else if (role && id) {
+        socket.join(`${role}:${id}`);
       }
     });
   });
@@ -40,6 +43,7 @@ function broadcastTourRequest(eventName, request) {
   if (!io) return;
   io.to('admin').emit(eventName, request);
   io.to(`customer:${request.customer_id}`).emit(eventName, request);
+  io.to(`user:${request.customer_id}`).emit(eventName, request);
   if (request.agent_id) {
     io.to(`agent:${request.agent_id}`).emit(eventName, request);
   }
@@ -54,6 +58,7 @@ function broadcastTourRequest(eventName, request) {
 function broadcastChatMessage(recipientId, payload) {
   if (!io) return;
   io.to(`customer:${recipientId}`).emit('chat_message', payload);
+  io.to(`user:${recipientId}`).emit('chat_message', payload);
   io.to(`agent:${recipientId}`).emit('chat_message', payload);
 }
 
@@ -76,6 +81,11 @@ function broadcastNotification(recipientType, recipientId, payload) {
     return;
   }
   io.to(`${recipientType}:${recipientId}`).emit('notification', payload);
+  if (recipientType === 'user') {
+    io.to(`customer:${recipientId}`).emit('notification', payload);
+  } else if (recipientType === 'customer') {
+    io.to(`user:${recipientId}`).emit('notification', payload);
+  }
 }
 
 module.exports = { initSocket, broadcastTourRequest, broadcastChatMessage, broadcastNotification };

@@ -335,6 +335,28 @@ function listListedByAgent(agentId) {
   ).then((r) => r.rows);
 }
 
+async function notifyOwnerOfClaim(row) {
+  if (!row || !row.owner_user_id) return;
+  try {
+    const user = await usersModel.findById(row.owner_user_id).catch(() => null);
+    const recipientType = user && user.role ? user.role : 'user';
+
+    const notifRow = await notificationsModel.create({
+      recipientType,
+      recipientId: String(row.owner_user_id),
+      kind: 'system',
+      title: 'Listing Request Claimed',
+      body: `Agent ${row.agent_name || 'an agent'} has claimed your property listing request "${row.title}" for inspection.`,
+      relatedId: String(row.id),
+    });
+
+    broadcastNotification(recipientType, String(row.owner_user_id), notificationsModel.toPublic(notifRow));
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[sellRequests] failed to notify owner ${row.owner_user_id} of claim`, err);
+  }
+}
+
 /**
  * First-come-first-served claim. Succeeds while the row is still
  * `open_to_brokers` (anyone), or while it's `broadcasting` and this agent
@@ -342,8 +364,8 @@ function listListedByAgent(agentId) {
  * claimed it, or this agent wasn't in the broadcast pool (caller reports
  * that as 409, not a 500).
  */
-function claim(id, { agentId, agentName }) {
-  return query(
+async function claim(id, { agentId, agentName }) {
+  const row = await query(
     `UPDATE sell_requests
      SET status = 'claimed'::sell_request_status, agent_id = $2, agent_name = $3, claimed_at = now()
      WHERE id = $1
@@ -354,6 +376,12 @@ function claim(id, { agentId, agentName }) {
      RETURNING *`,
     [id, agentId, agentName, OPEN_TO_BROKERS_STATUS, BROADCASTING_STATUS]
   ).then((r) => r.rows[0] || null);
+
+  if (row) {
+    await notifyOwnerOfClaim(row);
+  }
+
+  return row;
 }
 
 // ── Agent/Broker: inspection report ─────────────────────────────────────
