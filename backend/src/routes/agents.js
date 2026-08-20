@@ -173,6 +173,12 @@ router.get(
   '/:agentId/network',
   ...requireOwner,
   asyncHandler(async (req, res) => {
+    const membership = await membershipModel.getOrCreate(req.params.agentId);
+    if (membership.tier !== 'gold') {
+      return res.status(403).json({
+        error: 'The agent network is available to Gold members and above.',
+      });
+    }
     const [code, downline, overrides] = await Promise.all([
       networkModel.getOrCreateCode(req.params.agentId),
       networkModel.listDownline(req.params.agentId),
@@ -327,16 +333,20 @@ router.get(
   })
 );
 
-// PATCH /api/agents/:agentId/profile — Body: { bio?, city?, specialties? }
+// PATCH /api/agents/:agentId/profile — Body: { avatarUrl?, bio?, city?, specialties? }
 router.patch(
   '/:agentId/profile',
   ...requireOwner,
   asyncHandler(async (req, res) => {
-    const { bio, city, specialties } = req.body || {};
+    const { avatarUrl, bio, city, specialties } = req.body || {};
+    if (avatarUrl !== undefined && avatarUrl !== null &&
+        (typeof avatarUrl !== 'string' || avatarUrl.length > 5 * 1024 * 1024)) {
+      return res.status(400).json({ error: 'avatarUrl must be a string no larger than 5 MB.' });
+    }
     if (specialties !== undefined && !Array.isArray(specialties)) {
       return res.status(400).json({ error: 'specialties must be an array of strings.' });
     }
-    const row = await profileModel.update(req.params.agentId, { bio, city, specialties });
+    const row = await profileModel.update(req.params.agentId, { avatarUrl, bio, city, specialties });
     res.json(profileModel.toPublic(row));
   })
 );

@@ -36,7 +36,7 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 
 const app = express();
 app.use(cors({ origin: CORS_ORIGIN === '*' ? true : CORS_ORIGIN.split(',').map((s) => s.trim()) }));
-app.use(express.json());
+app.use(express.json({ limit: '6mb' }));
 
 app.get('/health', async (req, res) => {
   try {

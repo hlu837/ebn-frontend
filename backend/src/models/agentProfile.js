@@ -4,6 +4,7 @@ function toPublic(row) {
   if (!row) return null;
   return {
     userId: row.user_id,
+    avatarUrl: row.avatar_url,
     bio: row.bio,
     city: row.city,
     specialties: row.specialties || [],
@@ -35,16 +36,17 @@ async function getOrCreate(userId) {
   return created.rows[0];
 }
 
-function update(userId, { bio, city, specialties }) {
+function update(userId, { avatarUrl, bio, city, specialties }) {
   return query(
-    `INSERT INTO agent_profiles (user_id, bio, city, specialties)
-     VALUES ($1, COALESCE($2, ''), COALESCE($3, ''), COALESCE($4, '{}'))
+    `INSERT INTO agent_profiles (user_id, avatar_url, bio, city, specialties)
+     VALUES ($1, $2, COALESCE($3, ''), COALESCE($4, ''), COALESCE($5, '{}'))
      ON CONFLICT (user_id) DO UPDATE
-       SET bio = COALESCE($2, agent_profiles.bio),
-           city = COALESCE($3, agent_profiles.city),
-           specialties = COALESCE($4, agent_profiles.specialties)
+       SET avatar_url = COALESCE($2, agent_profiles.avatar_url),
+           bio = COALESCE($3, agent_profiles.bio),
+           city = COALESCE($4, agent_profiles.city),
+           specialties = COALESCE($5, agent_profiles.specialties)
      RETURNING *`,
-    [userId, bio ?? null, city ?? null, specialties ?? null]
+    [userId, avatarUrl ?? null, bio ?? null, city ?? null, specialties ?? null]
   ).then((r) => r.rows[0]);
 }
 
@@ -117,7 +119,7 @@ async function listDirectory({ specialty, city, search, excludeUserId, userId } 
     `SELECT
        u.id, u.full_name, u.agency_or_license, u.phone,
        u.agent_latitude, u.agent_longitude,
-       p.bio, p.city, p.specialties, p.boosted,
+      p.avatar_url, p.bio, p.city, p.specialties, p.boosted,
        COALESCE(r.review_count, 0) AS review_count,
        COALESCE(r.avg_rating, 0) AS avg_rating,
        COALESCE(m.tier, 'bronze') AS tier
@@ -137,6 +139,7 @@ async function listDirectory({ specialty, city, search, excludeUserId, userId } 
     userId: row.id,
     name: row.full_name,
     company: row.agency_or_license,
+    avatarUrl: row.avatar_url,
     phone: row.phone,
     bio: row.bio || '',
     city: row.city || '',

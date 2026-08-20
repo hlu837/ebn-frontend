@@ -4,8 +4,8 @@ const { query } = require('../db');
 // agent_membership_screen.dart — kept here as the source of truth for fee
 // amounts so upgrades can't be spoofed with a client-supplied price.
 // These are fallback values; actual pricing is fetched from membership_pricing table.
-const TIERS = ['bronze', 'silver', 'gold', 'diamond'];
-const TIER_MONTHLY_FEE_ETB = { bronze: 0, silver: 800, gold: 2200, diamond: 5000 };
+const TIERS = ['bronze', 'silver', 'gold'];
+const TIER_MONTHLY_FEE_ETB = { bronze: 0, silver: 800, gold: 2200 };
 const TIER_PERKS = {
   bronze: ['List up to 5 active properties', 'Standard search placement', 'Email support'],
   silver: [
@@ -21,20 +21,14 @@ const TIER_PERKS = {
     'Priority dispatch on nearby order requests',
     'Chat + phone support',
   ],
-  diamond: [
-    'Everything in Gold',
-    'Dedicated account manager',
-    'Boosted listings included free (up to 3/mo)',
-    'Early access to new markets',
-    '24/7 priority support line',
-  ],
 };
 
 /** Fetch tier pricing from database, falling back to hardcoded if unavailable. */
 async function getTierPricing() {
   try {
     const result = await query(
-      `SELECT tier, monthly_fee_etb FROM membership_pricing WHERE role = 'agent'
+      `SELECT tier, monthly_fee_etb FROM membership_pricing
+       WHERE role = 'agent' AND tier IN ('bronze', 'silver', 'gold')
        ORDER BY CASE tier WHEN 'bronze' THEN 0 WHEN 'silver' THEN 1 WHEN 'gold' THEN 2 ELSE 3 END`
     );
     const pricing = {};
@@ -131,7 +125,7 @@ function listBilling(userId) {
  * place to hook this up to next, same as property-listing fees).
  */
 async function setTier(userId, tier) {
-  if (!TIERS.includes(tier)) throw Object.assign(new Error('Invalid tier.'), { status: 400 });
+  if (!TIERS.includes(tier)) throw Object.assign(new Error('Agent tier must be bronze, silver, or gold.'), { status: 400 });
 
   const existing = await query(`SELECT tier FROM agent_memberships WHERE user_id = $1`, [userId]);
   const previousTier = existing.rows[0]?.tier ?? 'bronze';
