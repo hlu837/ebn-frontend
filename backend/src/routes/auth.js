@@ -96,11 +96,11 @@ router.post(
 
     const existing = await model.findByEmail(String(email).trim());
     if (existing) {
-      if (existing.account_status === 'pending_payment') {
+      if (existing.pending_role || existing.account_status === 'pending_payment') {
         return res.status(409).json({
           error: 'An account with this email is pending payment confirmation. Please sign in to complete payment.',
           accountStatus: 'pending_payment',
-          pendingRole: existing.pending_role,
+          pendingRole: existing.pending_role || 'agent',
           user: model.toPublic(existing),
         });
       }
@@ -232,14 +232,16 @@ router.post(
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
-    if (row.account_status && row.account_status !== 'active') {
+    if ((row.account_status && row.account_status !== 'active') || row.pending_role) {
       const publicUser = model.toPublic(row);
+      const status = (row.account_status && row.account_status !== 'active') ? row.account_status : 'pending_payment';
+      const pendingRole = row.pending_role || 'agent';
       return res.status(403).json({
-        error: row.account_status === 'pending_payment'
+        error: status === 'pending_payment'
           ? 'Your registration is waiting for payment confirmation.'
           : 'Your registration is waiting for admin approval.',
-        accountStatus: row.account_status,
-        pendingRole: row.pending_role,
+        accountStatus: status,
+        pendingRole: pendingRole,
         user: publicUser,
         token: signToken(publicUser),
       });

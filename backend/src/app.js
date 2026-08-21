@@ -38,6 +38,10 @@ const app = express();
 app.use(cors({ origin: CORS_ORIGIN === '*' ? true : CORS_ORIGIN.split(',').map((s) => s.trim()) }));
 app.use(express.json({ limit: '6mb' }));
 
+app.get('/', (req, res) => {
+  res.json({ status: 'online', message: 'EBN API Server is running' });
+});
+
 app.get('/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
