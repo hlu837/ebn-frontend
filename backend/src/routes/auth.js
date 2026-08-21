@@ -98,6 +98,25 @@ router.post(
       return res.status(409).json({ error: 'An account with this email already exists.' });
     }
 
+    if (requestedRole && ['agent', 'investor'].includes(requestedRole)) {
+      // Do NOT create user in DB yet. Return temporary pre-signup data so frontend can proceed to payment checkout.
+      return res.status(200).json({
+        isPendingPayment: true,
+        pendingUserData: {
+          fullName: String(fullName).trim(),
+          email: String(email).trim(),
+          password: String(password),
+          role: requestedRole,
+          phone: phone ? String(phone).trim() : null,
+          agencyOrLicense: agencyOrLicense ? String(agencyOrLicense).trim() : null,
+          interestedInFractionalInvesting: Boolean(interestedInFractionalInvesting),
+          referralCode: referralCode ? String(referralCode).trim() : null,
+          agentReferralCode: agentReferralCode ? String(agentReferralCode).trim() : null,
+          investorReferralCode: investorReferralCode ? String(investorReferralCode).trim() : null,
+        }
+      });
+    }
+
     const passwordHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
 
     const row = await model.create({
@@ -109,7 +128,7 @@ router.post(
       agencyOrLicense: agencyOrLicense ? String(agencyOrLicense).trim() : null,
       interestedInFractionalInvesting: Boolean(interestedInFractionalInvesting),
       referralCode: referralCode ? String(referralCode).trim() : null,
-      pendingRole,
+      pendingRole: null,
     });
 
     const user = model.toPublic(row);
@@ -132,38 +151,6 @@ router.post(
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[auth] failed to credit affiliate signup tokens', err);
-      }
-    }
-
-    // Separate from the affiliate program above: a new *agent* signing up
-    // with another agent's "AGT-" network code gets linked as that
-    // agent's downline — see agentNetwork.js for the override-commission
-    // mechanics this sets up. Best-effort, same as the affiliate credit.
-    if (user.role === 'agent' && agentReferralCode && String(agentReferralCode).trim()) {
-      try {
-        const sponsorId = await agentNetworkModel.findAgentIdByCode(String(agentReferralCode).trim());
-        if (sponsorId && sponsorId !== user.id) {
-          await agentNetworkModel.setSponsor(user.id, sponsorId);
-        }
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('[auth] failed to link agent to sponsor', err);
-      }
-    }
-
-    // Separate from both programs above: a new *investor* signing up with
-    // another investor's "INV-" network code gets linked as that
-    // investor's downline — see investorNetwork.js for the one-time
-    // referral-reward mechanics this sets up. Best-effort, same pattern.
-    if (user.role === 'investor' && investorReferralCode && String(investorReferralCode).trim()) {
-      try {
-        const sponsorId = await investorNetworkModel.findInvestorIdByCode(String(investorReferralCode).trim());
-        if (sponsorId && sponsorId !== user.id) {
-          await investorNetworkModel.setSponsor(user.id, sponsorId);
-        }
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('[auth] failed to link investor to sponsor', err);
       }
     }
 

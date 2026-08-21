@@ -32,17 +32,14 @@ function create({
   agencyOrLicense,
   interestedInFractionalInvesting,
   referralCode,
-  pendingRole,
 }) {
   return query(
     `INSERT INTO users (
        full_name, email, password_hash, role,
        phone, agency_or_license, interested_in_fractional_investing, referral_code,
-       account_status, pending_role
+       account_status
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
-       CASE WHEN $9 IS NULL THEN 'active' ELSE 'pending_payment' END,
-       $9)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active')
      RETURNING *`,
     [
       fullName,
@@ -53,7 +50,6 @@ function create({
       agencyOrLicense || null,
       Boolean(interestedInFractionalInvesting),
       referralCode || null,
-      pendingRole || null,
     ]
   ).then((r) => r.rows[0]);
 }

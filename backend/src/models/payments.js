@@ -34,13 +34,25 @@ async function create({
   firstName,
   lastName,
   checkoutUrl,
+  pendingUserPayload,
 }) {
   const { rows } = await query(
     `INSERT INTO payments
-       (tx_ref, purpose, owner_user_id, amount, currency, email, first_name, last_name, chapa_checkout_url)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       (tx_ref, purpose, owner_user_id, amount, currency, email, first_name, last_name, chapa_checkout_url, pending_user_payload)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
-    [txRef, purpose, ownerUserId || null, amount, currency, email, firstName || null, lastName || null, checkoutUrl || null]
+    [
+      txRef,
+      purpose,
+      ownerUserId || null,
+      amount,
+      currency,
+      email,
+      firstName || null,
+      lastName || null,
+      checkoutUrl || null,
+      pendingUserPayload ? JSON.stringify(pendingUserPayload) : null,
+    ]
   );
   return rows[0];
 }

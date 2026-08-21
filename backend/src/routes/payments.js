@@ -30,14 +30,85 @@ function chapaCallbackUrl() {
 
 const { query } = require('../db');
 
+const bcrypt = require('bcryptjs');
+const affiliatesModel = require('../models/affiliates');
+const agentNetworkModel = require('../models/agentNetwork');
+const investorNetworkModel = require('../models/investorNetwork');
+
 async function activatePaidSignup(payment) {
-  if (payment.status !== 'success' || !payment.owner_user_id) return;
+  if (payment.status !== 'success') return;
   const isAgent = payment.purpose.startsWith('agent_');
   const isInvestor = payment.purpose.startsWith('investor_');
   const role = isAgent ? 'agent' : isInvestor ? 'investor' : null;
   if (!role) return;
 
-  await usersModel.activatePendingRole(payment.owner_user_id, role);
+  let userId = payment.owner_user_id;
+
+  if (!userId && payment.pending_user_payload) {
+    const payload = typeof payment.pending_user_payload === 'string'
+      ? JSON.parse(payment.pending_user_payload)
+      : payment.pending_user_payload;
+
+    const existing = await usersModel.findByEmail(payload.email);
+    if (existing) {
+      userId = existing.id;
+      await usersModel.activatePendingRole(userId, role);
+    } else {
+      const passwordHash = await bcrypt.hash(payload.password, 10);
+      const newUser = await usersModel.create({
+        fullName: payload.fullName,
+        email: payload.email,
+        passwordHash,
+        role: role,
+        phone: payload.phone,
+        agencyOrLicense: payload.agencyOrLicense,
+        interestedInFractionalInvesting: payload.interestedInFractionalInvesting,
+        referralCode: payload.referralCode,
+      });
+      userId = newUser.id;
+
+      if (payload.referralCode) {
+        try {
+          const affiliateId = await affiliatesModel.findUserIdByCode(payload.referralCode);
+          if (affiliateId && affiliateId !== userId) {
+            await affiliatesModel.creditSignupTokens({
+              affiliateId,
+              referredUserId: userId,
+              referredUserName: newUser.full_name,
+            });
+          }
+        } catch (e) {
+          console.error('[payments] failed to credit affiliate signup tokens', e);
+        }
+      }
+
+      if (role === 'agent' && payload.agentReferralCode) {
+        try {
+          const sponsorId = await agentNetworkModel.findAgentIdByCode(payload.agentReferralCode);
+          if (sponsorId && sponsorId !== userId) {
+            await agentNetworkModel.setSponsor(userId, sponsorId);
+          }
+        } catch (e) {
+          console.error('[payments] failed to link agent sponsor', e);
+        }
+      }
+
+      if (role === 'investor' && payload.investorReferralCode) {
+        try {
+          const sponsorId = await investorNetworkModel.findInvestorIdByCode(payload.investorReferralCode);
+          if (sponsorId && sponsorId !== userId) {
+            await investorNetworkModel.setSponsor(userId, sponsorId);
+          }
+        } catch (e) {
+          console.error('[payments] failed to link investor sponsor', e);
+        }
+      }
+    }
+  } else if (userId) {
+    await usersModel.activatePendingRole(userId, role);
+  }
+
+  if (!userId) return;
 
   if (isAgent) {
     let tier = 'bronze';
@@ -50,12 +121,12 @@ async function activatePaidSignup(payment) {
          VALUES ($1, $2, CURRENT_DATE + INTERVAL '30 days')
          ON CONFLICT (user_id) DO UPDATE
          SET tier = EXCLUDED.tier, renewal_date = CURRENT_DATE + INTERVAL '30 days', updated_at = now()`,
-        [payment.owner_user_id, tier]
+        [userId, tier]
       );
       await query(
         `INSERT INTO agent_membership_billing (user_id, label, amount, status, billed_on)
          VALUES ($1, $2, $3, 'paid', CURRENT_DATE)`,
-        [payment.owner_user_id, `Agent Membership (${tier.toUpperCase()})`, payment.amount || 0]
+        [userId, `Agent Membership (${tier.toUpperCase()})`, payment.amount || 0]
       );
     } catch (err) {
       console.error('[payments] failed to update agent_memberships table:', err);
@@ -138,6 +209,7 @@ router.post(
       firstName: body.firstName,
       lastName: body.lastName,
       checkoutUrl,
+      pendingUserPayload: body.pendingUserPayload,
     });
 
     res.status(201).json({ txRef, checkoutUrl });
