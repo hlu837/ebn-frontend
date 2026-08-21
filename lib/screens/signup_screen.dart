@@ -127,6 +127,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
 
       if (_role == UserRole.agent) {
+        AppToast.showInfo(context, 'Please complete payment to activate your Agent account.');
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
               builder: (_) => AgentMembershipPlanSelectScreen(user: user)),
@@ -136,6 +137,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
 
       if (_role == UserRole.investor) {
+        AppToast.showInfo(context, 'Please complete payment to activate your Investor account.');
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
               builder: (_) => InvestorMembershipPlanSelectScreen(user: user)),
