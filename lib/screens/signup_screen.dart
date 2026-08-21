@@ -165,7 +165,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ? UserRole.investor
                 : _role;
 
-        final pseudoUser = AppUser(
+        final userToPass = e.user ?? AppUser(
           id: '',
           fullName: _nameCtrl.text.trim(),
           email: _emailCtrl.text.trim(),
@@ -180,7 +180,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(
                 builder: (_) => AgentMembershipPlanSelectScreen(
-                      user: pseudoUser,
+                      user: userToPass,
                       pendingUserPayload: e.pendingUserData,
                     )),
             (route) => false,
@@ -194,7 +194,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(
                 builder: (_) => InvestorMembershipPlanSelectScreen(
-                      user: pseudoUser,
+                      user: userToPass,
                       pendingUserPayload: e.pendingUserData,
                     )),
             (route) => false,

@@ -90,10 +90,16 @@ class AuthService {
     });
 
     if (res['isPendingPayment'] == true) {
+      AppUser? user;
+      if (res['user'] is Map<String, dynamic>) {
+        user = AppUser.fromJson(res['user'] as Map<String, dynamic>,
+            token: res['token'] as String?);
+      }
       throw AuthException(
         res['message'] as String? ?? 'Payment required for activation.',
         accountStatus: 'pending_payment',
         pendingRole: requestedRole,
+        user: user,
         pendingUserData: res['pendingUserData'] as Map<String, dynamic>?,
       );
     }
