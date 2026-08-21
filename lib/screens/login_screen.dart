@@ -93,16 +93,41 @@ class _LoginScreenState extends State<LoginScreen> {
     } on AuthException catch (e) {
       if (!mounted) return;
 
-      if (e.accountStatus == 'pending_payment' && e.user != null) {
-        AppToast.showInfo(context, 'Please complete payment to activate your account.');
-        if (e.pendingRole == 'agent') {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => AgentMembershipPlanSelectScreen(user: e.user!)),
+      final pendingRoleStr = e.pendingRole ?? e.user?.pendingRole;
+      final isPendingPayment = e.accountStatus == 'pending_payment' || e.user?.accountStatus == 'pending_payment' || pendingRoleStr != null;
+
+      if (isPendingPayment) {
+        final userToPass = e.user ?? AppUser(
+          id: '',
+          fullName: 'Pending User',
+          email: _emailCtrl.text.trim(),
+          role: UserRole.user,
+          accountStatus: 'pending_payment',
+          pendingRole: pendingRoleStr ?? 'agent',
+        );
+        AppToast.showInfo(
+            context, 'Please complete payment to activate your account.');
+        final roleToPay = pendingRoleStr ?? 'agent';
+        if (roleToPay == 'agent') {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (_) => AgentMembershipPlanSelectScreen(
+                user: userToPass,
+                pendingUserPayload: e.pendingUserData,
+              ),
+            ),
+            (route) => false,
           );
           return;
-        } else if (e.pendingRole == 'investor') {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => InvestorMembershipPlanSelectScreen(user: e.user!)),
+        } else if (roleToPay == 'investor') {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (_) => InvestorMembershipPlanSelectScreen(
+                user: userToPass,
+                pendingUserPayload: e.pendingUserData,
+              ),
+            ),
+            (route) => false,
           );
           return;
         }
@@ -114,7 +139,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 : UserRole.user;
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => VerificationPendingScreen(user: e.user!, targetRole: targetRole),
+            builder: (_) => VerificationPendingScreen(
+                user: e.user!, targetRole: targetRole),
           ),
         );
         return;
