@@ -16,6 +16,7 @@ class AuthException implements Exception {
   final AppUser? user;
   final String? token;
   final Map<String, dynamic>? pendingUserData;
+  final String? txRef;
 
   const AuthException(
     this.message, {
@@ -24,6 +25,7 @@ class AuthException implements Exception {
     this.user,
     this.token,
     this.pendingUserData,
+    this.txRef,
   });
 
   @override
@@ -258,6 +260,8 @@ class AuthService {
         json['error'] as String? ?? 'Something went wrong (${res.statusCode}).',
         accountStatus: json['accountStatus'] as String?,
         pendingRole: json['pendingRole'] as String?,
+        pendingUserData: json['pendingUserPayload'] as Map<String, dynamic>?,
+        txRef: json['txRef'] as String?,
         user: user,
         token: json['token'] as String?,
       );

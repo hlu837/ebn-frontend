@@ -156,26 +156,41 @@ class _SignUpScreenState extends State<SignUpScreen> {
     } on AuthException catch (e) {
       if (!mounted) return;
       if (e.accountStatus == 'pending_payment') {
+        // Determine the target paid role: prefer e.pendingRole from the backend
+        // (which is set when the backend's new guard fires and blocks plain-user
+        // creation), falling back to the locally chosen _role.
+        final targetRole = e.pendingRole == 'agent'
+            ? UserRole.agent
+            : e.pendingRole == 'investor'
+                ? UserRole.investor
+                : _role;
+
         final pseudoUser = AppUser(
-           id: '',
-           fullName: _nameCtrl.text.trim(),
-           email: _emailCtrl.text.trim(),
-           role: _role,
+          id: '',
+          fullName: _nameCtrl.text.trim(),
+          email: _emailCtrl.text.trim(),
+          role: targetRole,
         );
 
-        if (_role == UserRole.agent) {
-          AppToast.showInfo(context, e.message);
+        if (targetRole == UserRole.agent) {
+          AppToast.showInfo(
+            context,
+            'Please complete your Agent membership payment to activate your account.',
+          );
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(
                 builder: (_) => AgentMembershipPlanSelectScreen(
-                      user: pseudoUser, 
+                      user: pseudoUser,
                       pendingUserPayload: e.pendingUserData,
                     )),
             (route) => false,
           );
           return;
-        } else if (_role == UserRole.investor) {
-          AppToast.showInfo(context, e.message);
+        } else if (targetRole == UserRole.investor) {
+          AppToast.showInfo(
+            context,
+            'Please complete your Investor membership payment to activate your account.',
+          );
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(
                 builder: (_) => InvestorMembershipPlanSelectScreen(
