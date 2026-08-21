@@ -176,7 +176,11 @@ router.post(
       return_url: process.env.CHAPA_RETURN_URL || undefined,
       customization: {
         title: 'EBN Membership',
-        description: String(body.description || 'EBN Membership Fee').slice(0, 60),
+        description: String(body.description || 'EBN Membership Fee')
+          .replace(/[^a-zA-Z0-9\-_ .]/g, ' ')  // strip chars Chapa disallows
+          .replace(/\s+/g, ' ')                  // collapse multiple spaces
+          .trim()
+          .slice(0, 60),
       },
     };
     console.log('[chapa] sending payload:', JSON.stringify(chapaPayload));
