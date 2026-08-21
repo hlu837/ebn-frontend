@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/auth_response.dart';
 import '../models/user_role.dart';
 import '../providers/pending_form_store.dart';
 import '../services/auth_service.dart';
