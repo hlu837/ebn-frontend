@@ -154,6 +154,38 @@ class _SignUpScreenState extends State<SignUpScreen> {
       );
     } on AuthException catch (e) {
       if (!mounted) return;
+      if (e.accountStatus == 'pending_payment') {
+        final pseudoUser = AppUser(
+           id: '',
+           fullName: _nameCtrl.text.trim(),
+           email: _emailCtrl.text.trim(),
+           role: _role,
+        );
+
+        if (_role == UserRole.agent) {
+          AppToast.showInfo(context, e.message);
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+                builder: (_) => AgentMembershipPlanSelectScreen(
+                      user: pseudoUser, 
+                      pendingUserPayload: e.pendingUserData,
+                    )),
+            (route) => false,
+          );
+          return;
+        } else if (_role == UserRole.investor) {
+          AppToast.showInfo(context, e.message);
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+                builder: (_) => InvestorMembershipPlanSelectScreen(
+                      user: pseudoUser,
+                      pendingUserPayload: e.pendingUserData,
+                    )),
+            (route) => false,
+          );
+          return;
+        }
+      }
       AppToast.showError(context, e.message);
     } finally {
       if (mounted) setState(() => _isLoading = false);

@@ -15,6 +15,7 @@ class AuthException implements Exception {
   final String? pendingRole;
   final AppUser? user;
   final String? token;
+  final Map<String, dynamic>? pendingUserData;
 
   const AuthException(
     this.message, {
@@ -22,6 +23,7 @@ class AuthException implements Exception {
     this.pendingRole,
     this.user,
     this.token,
+    this.pendingUserData,
   });
 
   @override
@@ -84,6 +86,16 @@ class AuthService {
         'investorReferralCode': investorReferralCode.trim(),
       if (requestedRole != null) 'requestedRole': requestedRole,
     });
+
+    if (res['isPendingPayment'] == true) {
+      throw AuthException(
+        res['message'] as String? ?? 'Payment required for activation.',
+        accountStatus: 'pending_payment',
+        pendingRole: requestedRole,
+        pendingUserData: res['pendingUserData'] as Map<String, dynamic>?,
+      );
+    }
+
     return AppUser.fromJson(res['user'] as Map<String, dynamic>,
         token: res['token'] as String?);
   }

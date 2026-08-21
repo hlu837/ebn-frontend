@@ -53,6 +53,7 @@ class PaymentService {
     String? lastName,
     String? description,
     String currency = 'ETB',
+    Map<String, dynamic>? pendingUserPayload,
   }) async {
     http.Response res;
     try {
@@ -69,6 +70,7 @@ class PaymentService {
               if (firstName != null) 'firstName': firstName,
               if (lastName != null) 'lastName': lastName,
               if (description != null) 'description': description,
+              if (pendingUserPayload != null) 'pendingUserPayload': pendingUserPayload,
             }),
           )
           .timeout(const Duration(seconds: 20));

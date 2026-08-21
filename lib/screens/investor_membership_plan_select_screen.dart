@@ -73,9 +73,10 @@ const kInvestorMembershipPlan = InvestorMembershipPlan(
 /// They must complete payment before
 /// activating their account and entering the Investor Workspace.
 class InvestorMembershipPlanSelectScreen extends StatefulWidget {
-  const InvestorMembershipPlanSelectScreen({super.key, required this.user});
+  const InvestorMembershipPlanSelectScreen({super.key, required this.user, this.pendingUserPayload});
 
   final AppUser user;
+  final Map<String, dynamic>? pendingUserPayload;
 
   @override
   State<InvestorMembershipPlanSelectScreen> createState() =>
@@ -126,7 +127,7 @@ class _InvestorMembershipPlanSelectScreenState
       backgroundColor: AppColors.cloud,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => _InvestorPaymentSheet(plan: plan, user: widget.user),
+      builder: (ctx) => _InvestorPaymentSheet(plan: plan, user: widget.user, pendingUserPayload: widget.pendingUserPayload),
     );
   }
 
@@ -482,10 +483,11 @@ class _InvestorPlanCard extends StatelessWidget {
 // ── Payment Method Selector ──────────────────────────────────────────────────
 
 class _InvestorPaymentSheet extends StatefulWidget {
-  const _InvestorPaymentSheet({required this.plan, required this.user});
+  const _InvestorPaymentSheet({required this.plan, required this.user, this.pendingUserPayload});
 
   final InvestorMembershipPlan plan;
   final AppUser user;
+  final Map<String, dynamic>? pendingUserPayload;
 
   @override
   State<_InvestorPaymentSheet> createState() => _InvestorPaymentSheetState();
@@ -524,20 +526,21 @@ class _InvestorPaymentSheetState extends State<_InvestorPaymentSheet> {
       _chapaError = null;
     });
     try {
-      String email = widget.user.email ?? '';
-      if (!email.contains('@') || !email.contains('.')) {
-        email = 'user_${widget.user.id.substring(0, 8)}@gmail.com';
+      String email = widget.user.email;
+      if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
+        email = 'user_${widget.user.id.isNotEmpty ? widget.user.id.substring(0, 8) : DateTime.now().millisecondsSinceEpoch}@gmail.com';
       }
 
       final checkout = await PaymentService().initialize(
         purpose: 'investor_signup_${widget.plan.tierKey}',
         amount: widget.plan.priceEtb,
         email: email,
-        ownerUserId: widget.user.id,
+        ownerUserId: widget.user.id.isNotEmpty ? widget.user.id : null,
         firstName: widget.user.fullName.split(' ').first,
         lastName: widget.user.fullName.split(' ').skip(1).join(' '),
         description:
-            '${widget.plan.title.replaceAll('\n', ' ')} — ${widget.plan.formattedPrice}',
+            '${widget.plan.title.replaceAll('\n', ' ')} - ${widget.plan.formattedPrice}',
+        pendingUserPayload: widget.pendingUserPayload,
       );
 
       setState(() {

@@ -120,9 +120,10 @@ const kAgentMembershipPlans = <AgentMembershipPlan>[
 /// They must pick an Agent Membership Plan and complete payment before
 /// activating their account and entering the Agent Workspace.
 class AgentMembershipPlanSelectScreen extends StatefulWidget {
-  const AgentMembershipPlanSelectScreen({super.key, required this.user});
+  const AgentMembershipPlanSelectScreen({super.key, required this.user, this.pendingUserPayload});
 
   final AppUser user;
+  final Map<String, dynamic>? pendingUserPayload;
 
   @override
   State<AgentMembershipPlanSelectScreen> createState() =>
@@ -176,7 +177,7 @@ class _AgentMembershipPlanSelectScreenState
       backgroundColor: AppColors.cloud,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => _AgentPaymentSheet(plan: plan, user: widget.user),
+      builder: (ctx) => _AgentPaymentSheet(plan: plan, user: widget.user, pendingUserPayload: widget.pendingUserPayload),
     );
   }
 
@@ -580,10 +581,11 @@ class _AgentPlanCard extends StatelessWidget {
 // ── Payment Method Selector ──────────────────────────────────────────────────
 
 class _AgentPaymentSheet extends StatefulWidget {
-  const _AgentPaymentSheet({required this.plan, required this.user});
+  const _AgentPaymentSheet({required this.plan, required this.user, this.pendingUserPayload});
 
   final AgentMembershipPlan plan;
   final AppUser user;
+  final Map<String, dynamic>? pendingUserPayload;
 
   @override
   State<_AgentPaymentSheet> createState() => _AgentPaymentSheetState();
@@ -622,20 +624,21 @@ class _AgentPaymentSheetState extends State<_AgentPaymentSheet> {
       _chapaError = null;
     });
     try {
-      String email = widget.user.email ?? '';
-      if (!email.contains('@') || !email.contains('.')) {
-        email = 'user_${widget.user.id.substring(0, 8)}@gmail.com';
+      String email = widget.user.email;
+      if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
+        email = 'user_${widget.user.id.isNotEmpty ? widget.user.id.substring(0, 8) : DateTime.now().millisecondsSinceEpoch}@gmail.com';
       }
 
       final checkout = await PaymentService().initialize(
         purpose: 'agent_signup_${widget.plan.tierKey}',
         amount: widget.plan.priceEtb,
         email: email,
-        ownerUserId: widget.user.id,
+        ownerUserId: widget.user.id.isNotEmpty ? widget.user.id : null,
         firstName: widget.user.fullName.split(' ').first,
         lastName: widget.user.fullName.split(' ').skip(1).join(' '),
         description:
-            '${widget.plan.title.replaceAll('\n', ' ')} — ${widget.plan.formattedPrice}',
+            '${widget.plan.title.replaceAll('\n', ' ')} - ${widget.plan.formattedPrice}',
+        pendingUserPayload: widget.pendingUserPayload,
       );
 
       setState(() {
