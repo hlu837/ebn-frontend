@@ -7,6 +7,7 @@ const settingsModel = require('../models/visitorSettings');
 const affiliatesModel = require('../models/affiliates');
 const agentNetworkModel = require('../models/agentNetwork');
 const investorNetworkModel = require('../models/investorNetwork');
+const paymentsModel = require('../models/payments');
 
 const router = express.Router();
 
@@ -96,6 +97,26 @@ router.post(
     const existing = await model.findByEmail(String(email).trim());
     if (existing) {
       return res.status(409).json({ error: 'An account with this email already exists.' });
+    }
+
+    // ── Guard: block plain-user creation if a pending paid-role payment
+    // already exists for this email. This covers the case where someone
+    // started the agent/investor signup flow (which returned isPendingPayment)
+    // and then tried to register again as a regular visitor without paying.
+    const pendingPayment = await paymentsModel.findPendingByEmail(String(email).trim());
+    if (pendingPayment) {
+      const pendingRole = pendingPayment.purpose.startsWith('agent_') ? 'agent' : 'investor';
+      return res.status(409).json({
+        error: 'You have a pending payment for a paid role. Please complete your payment to activate your account.',
+        accountStatus: 'pending_payment',
+        pendingRole,
+        txRef: pendingPayment.tx_ref,
+        pendingUserPayload: pendingPayment.pending_user_payload
+          ? (typeof pendingPayment.pending_user_payload === 'string'
+              ? JSON.parse(pendingPayment.pending_user_payload)
+              : pendingPayment.pending_user_payload)
+          : null,
+      });
     }
 
     if (requestedRole && ['agent', 'investor'].includes(requestedRole)) {

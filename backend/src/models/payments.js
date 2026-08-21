@@ -62,6 +62,24 @@ async function findByTxRef(txRef) {
   return rows[0] || null;
 }
 
+/**
+ * Returns the most-recent *pending* agent or investor payment for the given
+ * email, or null if none exists. Used by the signup endpoint to block
+ * plain-user creation when the person already started a paid-role checkout.
+ */
+async function findPendingByEmail(email) {
+  const { rows } = await query(
+    `SELECT * FROM payments
+     WHERE email ILIKE $1
+       AND status = 'pending'
+       AND (purpose LIKE 'agent\_%' OR purpose LIKE 'investor\_%')
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [email]
+  );
+  return rows[0] || null;
+}
+
 async function markStatus(txRef, status, verifyResponse) {
   const { rows } = await query(
     `UPDATE payments
@@ -136,4 +154,4 @@ async function countAll({ status, search } = {}) {
   return rows[0].count;
 }
 
-module.exports = { toPublic, create, findByTxRef, markStatus, listAll, countAll };
+module.exports = { toPublic, create, findByTxRef, findPendingByEmail, markStatus, listAll, countAll };
