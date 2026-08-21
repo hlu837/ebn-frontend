@@ -96,33 +96,36 @@ router.post(
 
     const existing = await model.findByEmail(String(email).trim());
     if (existing) {
+      if (existing.account_status === 'pending_payment') {
+        return res.status(409).json({
+          error: 'An account with this email is pending payment confirmation. Please sign in to complete payment.',
+          accountStatus: 'pending_payment',
+          pendingRole: existing.pending_role,
+          user: model.toPublic(existing),
+        });
+      }
       return res.status(409).json({ error: 'An account with this email already exists.' });
     }
 
-    // ── Guard: block plain-user creation if a pending paid-role payment
-    // already exists for this email. This covers the case where someone
-    // started the agent/investor signup flow (which returned isPendingPayment)
-    // and then tried to register again as a regular visitor without paying.
-    const pendingPayment = await paymentsModel.findPendingByEmail(String(email).trim());
-    if (pendingPayment) {
-      const pendingRole = pendingPayment.purpose.startsWith('agent_') ? 'agent' : 'investor';
-      return res.status(409).json({
-        error: 'You have a pending payment for a paid role. Please complete your payment to activate your account.',
-        accountStatus: 'pending_payment',
-        pendingRole,
-        txRef: pendingPayment.tx_ref,
-        pendingUserPayload: pendingPayment.pending_user_payload
-          ? (typeof pendingPayment.pending_user_payload === 'string'
-              ? JSON.parse(pendingPayment.pending_user_payload)
-              : pendingPayment.pending_user_payload)
-          : null,
-      });
-    }
-
     if (requestedRole && ['agent', 'investor'].includes(requestedRole)) {
-      // Do NOT create user in DB yet. Return temporary pre-signup data so frontend can proceed to payment checkout.
+      const passwordHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
+      const row = await model.createPending({
+        fullName: String(fullName).trim(),
+        email: String(email).trim(),
+        passwordHash,
+        pendingRole: requestedRole,
+        phone: phone ? String(phone).trim() : null,
+        agencyOrLicense: agencyOrLicense ? String(agencyOrLicense).trim() : null,
+        interestedInFractionalInvesting: Boolean(interestedInFractionalInvesting),
+        referralCode: referralCode ? String(referralCode).trim() : null,
+      });
+
+      const user = model.toPublic(row);
+
       return res.status(200).json({
         isPendingPayment: true,
+        user,
+        token: signToken(user),
         pendingUserData: {
           fullName: String(fullName).trim(),
           email: String(email).trim(),
@@ -193,6 +196,34 @@ router.post(
 
     const row = await model.findByEmail(String(email).trim());
     if (!row) {
+      const pendingPayment = await paymentsModel.findPendingByEmail(String(email).trim());
+      if (pendingPayment?.pending_user_payload) {
+        const payload = typeof pendingPayment.pending_user_payload === 'string'
+          ? JSON.parse(pendingPayment.pending_user_payload)
+          : pendingPayment.pending_user_payload;
+        if (payload.password === String(password)) {
+          const pendingRole = pendingPayment.purpose.startsWith('agent_') ? 'agent' : 'investor';
+          const pendingUser = {
+            id: '',
+            fullName: payload.fullName,
+            email: payload.email,
+            role: 'user',
+            phone: payload.phone || null,
+            agencyOrLicense: payload.agencyOrLicense || null,
+            interestedInFractionalInvesting: Boolean(payload.interestedInFractionalInvesting),
+            referralCode: payload.referralCode || null,
+            accountStatus: 'pending_payment',
+            pendingRole,
+          };
+          return res.status(403).json({
+            error: 'Your registration is waiting for payment confirmation.',
+            accountStatus: 'pending_payment',
+            pendingRole,
+            pendingUserPayload: payload,
+            user: pendingUser,
+          });
+        }
+      }
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 

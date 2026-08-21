@@ -54,6 +54,44 @@ function create({
   ).then((r) => r.rows[0]);
 }
 
+/**
+ * Creates a user whose account is awaiting payment before activation.
+ * The row is inserted immediately so the email is reserved in the DB and
+ * cannot be re-used for a plain visitor signup. Payment completion calls
+ * activatePendingRole() to set role = pendingRole and account_status = 'active'.
+ */
+function createPending({
+  fullName,
+  email,
+  passwordHash,
+  pendingRole,
+  phone,
+  agencyOrLicense,
+  interestedInFractionalInvesting,
+  referralCode,
+}) {
+  return query(
+    `INSERT INTO users (
+       full_name, email, password_hash, role,
+       phone, agency_or_license, interested_in_fractional_investing, referral_code,
+       account_status, pending_role
+     )
+     VALUES ($1, $2, $3, 'user', $4, $5, $6, $7, 'pending_payment', $8)
+     RETURNING *`,
+    [
+      fullName,
+      email,
+      passwordHash,
+      phone || null,
+      agencyOrLicense || null,
+      Boolean(interestedInFractionalInvesting),
+      referralCode || null,
+      pendingRole,
+    ]
+  ).then((r) => r.rows[0]);
+}
+
+
 /** Looks up by email — CITEXT column, so this is already case-insensitive. */
 function findByEmail(email) {
   return query(`SELECT * FROM users WHERE email = $1`, [email]).then((r) => r.rows[0] || null);
@@ -204,6 +242,7 @@ function markPendingApproval(id, role) {
 module.exports = {
   toPublic,
   create,
+  createPending,
   findByEmail,
   findById,
   listAll,
