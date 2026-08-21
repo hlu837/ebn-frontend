@@ -64,6 +64,7 @@ router.post(
       referralCode,
       agentReferralCode,
       investorReferralCode,
+      requestedRole,
     } = req.body || {};
 
     if (!fullName || !String(fullName).trim()) {
@@ -76,6 +77,21 @@ router.post(
       return res.status(400).json({ error: 'password must be at least 6 characters.' });
     }
     const normalizedRole = role && VALID_ROLES.includes(role) ? role : 'user';
+    const pendingRole = requestedRole && ['agent', 'investor'].includes(requestedRole)
+      ? requestedRole
+      : null;
+
+    if (normalizedRole === 'agent' || normalizedRole === 'investor') {
+      return res.status(400).json({
+        error: 'Paid roles must be submitted as requestedRole and activated after payment or admin approval.',
+      });
+    }
+
+    if (normalizedRole === 'admin') {
+      return res.status(400).json({
+        error: 'Admin accounts cannot be self-registered. They are provisioned by the team.',
+      });
+    }
 
     const existing = await model.findByEmail(String(email).trim());
     if (existing) {
@@ -93,6 +109,7 @@ router.post(
       agencyOrLicense: agencyOrLicense ? String(agencyOrLicense).trim() : null,
       interestedInFractionalInvesting: Boolean(interestedInFractionalInvesting),
       referralCode: referralCode ? String(referralCode).trim() : null,
+      pendingRole,
     });
 
     const user = model.toPublic(row);
@@ -174,6 +191,19 @@ router.post(
     const matches = await bcrypt.compare(String(password), row.password_hash);
     if (!matches) {
       return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    if (row.account_status && row.account_status !== 'active') {
+      const publicUser = model.toPublic(row);
+      return res.status(403).json({
+        error: row.account_status === 'pending_payment'
+          ? 'Your registration is waiting for payment confirmation.'
+          : 'Your registration is waiting for admin approval.',
+        accountStatus: row.account_status,
+        pendingRole: row.pending_role,
+        user: publicUser,
+        token: signToken(publicUser),
+      });
     }
 
     const user = model.toPublic(row);

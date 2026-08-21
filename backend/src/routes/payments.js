@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const model = require('../models/payments');
+const usersModel = require('../models/users');
 
 const router = express.Router();
 
@@ -17,6 +18,49 @@ function requireChapaSecretKey(res) {
     return null;
   }
   return key;
+}
+
+function chapaCallbackUrl() {
+  const configured = process.env.CHAPA_CALLBACK_URL;
+  if (configured && !configured.includes('example.com')) return configured;
+  return process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}/api/payments/chapa/webhook`
+    : undefined;
+}
+
+const { query } = require('../db');
+
+async function activatePaidSignup(payment) {
+  if (payment.status !== 'success' || !payment.owner_user_id) return;
+  const isAgent = payment.purpose.startsWith('agent_');
+  const isInvestor = payment.purpose.startsWith('investor_');
+  const role = isAgent ? 'agent' : isInvestor ? 'investor' : null;
+  if (!role) return;
+
+  await usersModel.activatePendingRole(payment.owner_user_id, role);
+
+  if (isAgent) {
+    let tier = 'bronze';
+    if (payment.purpose.includes('silver')) tier = 'silver';
+    else if (payment.purpose.includes('gold')) tier = 'gold';
+
+    try {
+      await query(
+        `INSERT INTO agent_memberships (user_id, tier, renewal_date)
+         VALUES ($1, $2, CURRENT_DATE + INTERVAL '30 days')
+         ON CONFLICT (user_id) DO UPDATE
+         SET tier = EXCLUDED.tier, renewal_date = CURRENT_DATE + INTERVAL '30 days', updated_at = now()`,
+        [payment.owner_user_id, tier]
+      );
+      await query(
+        `INSERT INTO agent_membership_billing (user_id, label, amount, status, billed_on)
+         VALUES ($1, $2, $3, 'paid', CURRENT_DATE)`,
+        [payment.owner_user_id, `Agent Membership (${tier.toUpperCase()})`, payment.amount || 0]
+      );
+    } catch (err) {
+      console.error('[payments] failed to update agent_memberships table:', err);
+    }
+  }
 }
 
 const REQUIRED_INIT_FIELDS = ['purpose', 'amount', 'email'];
@@ -45,18 +89,23 @@ router.post(
       return res.status(400).json({ error: 'amount must be a positive number.' });
     }
 
+    let customerEmail = String(body.email).trim();
+    if (!customerEmail.includes('@') || !customerEmail.includes('.')) {
+      customerEmail = 'customer@ebn.et';
+    }
+
     const chapaPayload = {
       amount: String(amount),
       currency: body.currency || 'ETB',
-      email: body.email,
+      email: customerEmail,
       first_name: body.firstName || undefined,
       last_name: body.lastName || undefined,
       tx_ref: txRef,
-      callback_url: process.env.CHAPA_CALLBACK_URL || undefined,
+      callback_url: chapaCallbackUrl(),
       return_url: process.env.CHAPA_RETURN_URL || undefined,
       customization: {
-        title: 'Onsite fee',
-        description: String(body.description || 'Onsite listing fee').slice(0, 60),
+        title: 'EBN Membership',
+        description: String(body.description || 'EBN Membership Fee').slice(0, 60),
       },
     };
     console.log('[chapa] sending payload:', JSON.stringify(chapaPayload));
@@ -127,8 +176,32 @@ router.get(
     const paymentStatus = chapaJson.data?.status; // 'success' | 'failed' | others
     const nextStatus = paymentStatus === 'success' ? 'success' : chapaJson.status === 'success' ? 'pending' : 'failed';
     const updated = await model.markStatus(txRef, nextStatus, chapaJson);
+    await activatePaidSignup(updated);
 
     res.json(model.toPublic(updated));
+  })
+);
+
+// Chapa server-to-server callback. The payment is still verified against
+// Chapa before a pending agent/investor account is activated.
+router.post(
+  '/chapa/webhook',
+  asyncHandler(async (req, res) => {
+    const txRef = req.body?.tx_ref || req.body?.trx_ref || req.body?.data?.tx_ref;
+    if (!txRef) return res.status(400).json({ error: 'tx_ref is required.' });
+    const local = await model.findByTxRef(String(txRef));
+    if (!local) return res.status(404).json({ error: 'Unknown payment reference.' });
+
+    const secretKey = requireChapaSecretKey(res);
+    if (!secretKey) return;
+    const chapaRes = await fetch(`${CHAPA_BASE_URL}/transaction/verify/${encodeURIComponent(txRef)}`, {
+      headers: { Authorization: `Bearer ${secretKey}` },
+    });
+    const chapaJson = await chapaRes.json().catch(() => null);
+    const nextStatus = chapaJson?.data?.status === 'success' ? 'success' : 'failed';
+    const updated = await model.markStatus(txRef, nextStatus, chapaJson);
+    await activatePaidSignup(updated);
+    res.json({ received: true, status: updated.status });
   })
 );
 

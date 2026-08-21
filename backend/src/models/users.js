@@ -18,6 +18,8 @@ function toPublic(row) {
     agentLatitude: row.agent_latitude,
     agentLongitude: row.agent_longitude,
     agentLocationUpdatedAt: row.agent_location_updated_at,
+    accountStatus: row.account_status,
+    pendingRole: row.pending_role,
   };
 }
 
@@ -30,13 +32,17 @@ function create({
   agencyOrLicense,
   interestedInFractionalInvesting,
   referralCode,
+  pendingRole,
 }) {
   return query(
     `INSERT INTO users (
        full_name, email, password_hash, role,
-       phone, agency_or_license, interested_in_fractional_investing, referral_code
+       phone, agency_or_license, interested_in_fractional_investing, referral_code,
+       account_status, pending_role
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+       CASE WHEN $9 IS NULL THEN 'active' ELSE 'pending_payment' END,
+       $9)
      RETURNING *`,
     [
       fullName,
@@ -47,6 +53,7 @@ function create({
       agencyOrLicense || null,
       Boolean(interestedInFractionalInvesting),
       referralCode || null,
+      pendingRole || null,
     ]
   ).then((r) => r.rows[0]);
 }
@@ -178,6 +185,26 @@ function updatePasswordHash(id, passwordHash) {
   );
 }
 
+function activatePendingRole(id, role) {
+  return query(
+    `UPDATE users
+     SET role = $2, account_status = 'active', pending_role = NULL
+     WHERE id = $1 AND account_status <> 'active' AND pending_role = $2
+     RETURNING *`,
+    [id, role]
+  ).then((r) => r.rows[0] || null);
+}
+
+function markPendingApproval(id, role) {
+  return query(
+    `UPDATE users
+     SET account_status = 'pending_approval'
+     WHERE id = $1 AND account_status = 'pending_payment' AND pending_role = $2
+     RETURNING *`,
+    [id, role]
+  ).then((r) => r.rows[0] || null);
+}
+
 module.exports = {
   toPublic,
   create,
@@ -190,4 +217,6 @@ module.exports = {
   findNearbyAgents,
   updateProfile,
   updatePasswordHash,
+  activatePendingRole,
+  markPendingApproval,
 };

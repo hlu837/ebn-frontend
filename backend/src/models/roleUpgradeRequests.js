@@ -97,10 +97,36 @@ async function approve(id, { adminNote } = {}) {
   ).then((r) => r.rows[0] || null);
   if (!row) return null;
 
-  const userRow = await query(`UPDATE users SET role = $2 WHERE id = $1 RETURNING *`, [
-    row.user_id,
-    row.requested_role,
-  ]).then((r) => r.rows[0] || null);
+  const userRow = await query(
+    `UPDATE users
+     SET role = $2, account_status = 'active', pending_role = NULL
+     WHERE id = $1 RETURNING *`,
+    [row.user_id, row.requested_role]
+  ).then((r) => r.rows[0] || null);
+
+  if (row.requested_role === 'agent') {
+    let tier = 'bronze';
+    const msg = (row.message || '').toLowerCase();
+    if (msg.includes('silver') || msg.includes('professional')) tier = 'silver';
+    else if (msg.includes('gold') || msg.includes('elite')) tier = 'gold';
+
+    try {
+      await query(
+        `INSERT INTO agent_memberships (user_id, tier, renewal_date)
+         VALUES ($1, $2, CURRENT_DATE + INTERVAL '30 days')
+         ON CONFLICT (user_id) DO UPDATE
+         SET tier = EXCLUDED.tier, renewal_date = CURRENT_DATE + INTERVAL '30 days', updated_at = now()`,
+        [row.user_id, tier]
+      );
+      await query(
+        `INSERT INTO agent_membership_billing (user_id, label, amount, status, billed_on)
+         VALUES ($1, $2, $3, 'paid', CURRENT_DATE)`,
+        [row.user_id, `Agent Membership (${tier.toUpperCase()})`, tier === 'gold' ? 30 : tier === 'silver' ? 20 : 10]
+      );
+    } catch (err) {
+      console.error('[roleUpgradeRequests] failed to upsert agent_memberships:', err);
+    }
+  }
 
   return { request: row, user: userRow };
 }

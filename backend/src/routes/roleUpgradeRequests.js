@@ -65,6 +65,7 @@ router.post(
       agencyOrLicense,
       interestedInFractionalInvesting,
     });
+    await usersModel.markPendingApproval(req.user.id, requestedRole);
     const created = model.toPublic(row);
 
     try {
