@@ -286,6 +286,48 @@ class AgentService {
     return AgentNetworkData.fromJson(json);
   }
 
+  // ── Client Referrals ─────────────────────────────────────────────────
+
+  /// GET /api/referrals — fetch all client referrals sent or received
+  Future<List<Map<String, dynamic>>> fetchReferrals(
+      {required String token}) async {
+    return _getList('/api/referrals', token: token);
+  }
+
+  /// POST /api/referrals — send a new client referral to another agent
+  Future<Map<String, dynamic>> sendReferral({
+    required String receiverId,
+    required String clientName,
+    required String clientPhone,
+    required String categorySlug,
+    required double feePercent,
+    String? notes,
+    required String token,
+  }) async {
+    return _post(
+      '/api/referrals',
+      {
+        'receiverId': receiverId,
+        'clientName': clientName,
+        'clientPhone': clientPhone,
+        'categorySlug': categorySlug,
+        'feePercent': feePercent,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+      },
+      token: token,
+    );
+  }
+
+  /// PATCH /api/referrals/:id/status — update referral status
+  Future<Map<String, dynamic>> updateReferralStatus(
+    String referralId, {
+    required String status,
+    required String token,
+  }) async {
+    return _patch('/api/referrals/$referralId/status', {'status': status},
+        token: token);
+  }
+
   // ── Broker Network directory ────────────────────────────────────────
 
   /// GET /api/agents?specialty=&city=&search=&excludeUserId=&userId= —

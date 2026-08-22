@@ -54,6 +54,43 @@ class _Referral {
     required this.date,
     this.notes,
   });
+
+  factory _Referral.fromJson(Map<String, dynamic> json, String currentUserId) {
+    final senderId = json['senderId'] as String? ?? '';
+    final isSent = senderId == currentUserId;
+    final counterpartName = isSent
+        ? (json['receiverName'] as String? ?? 'Agent')
+        : (json['senderName'] as String? ?? 'Agent');
+
+    final statusStr = json['status'] as String? ?? 'pending';
+    _ReferralStatus status;
+    switch (statusStr) {
+      case 'accepted':
+        status = _ReferralStatus.accepted;
+      case 'closed':
+        status = _ReferralStatus.closed;
+      case 'declined':
+        status = _ReferralStatus.declined;
+      default:
+        status = _ReferralStatus.pending;
+    }
+
+    final catSlugStr = json['categorySlug'] as String? ?? 'apartments';
+    final category = AssetCategorySlug.fromSlug(catSlugStr);
+
+    return _Referral(
+      id: json['id'] as String? ?? '',
+      isSent: isSent,
+      counterpartName: counterpartName,
+      clientName: json['clientName'] as String? ?? 'Client',
+      clientPhone: json['clientPhone'] as String? ?? '',
+      category: category,
+      feePercent: (json['feePercent'] as num?)?.toDouble() ?? 10.0,
+      status: status,
+      date: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+      notes: json['notes'] as String?,
+    );
+  }
 }
 
 class AgentReferralsScreen extends StatefulWidget {
@@ -67,14 +104,32 @@ class AgentReferralsScreen extends StatefulWidget {
 
 class _AgentReferralsScreenState extends State<AgentReferralsScreen> with SingleTickerProviderStateMixin {
   late final TabController _tabController = TabController(length: 2, vsync: this);
+  final AgentService _agentService = AgentService();
 
-  // No `/api/referrals` backend exists yet, so this starts empty. Referrals
-  // sent in-session via `_openSendReferralSheet` are appended to this list,
-  // but nothing here is persisted or fetched from a server — closing and
-  // reopening the screen (or the app) loses them. Swap this in-memory list
-  // for a real fetch + persisted send once the referral program has
-  // server-side support.
-  final List<_Referral> _referrals = [];
+  List<_Referral> _referrals = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReferrals();
+  }
+
+  Future<void> _loadReferrals() async {
+    setState(() => _loading = true);
+    try {
+      final rows = await _agentService.fetchReferrals(token: widget.user.token ?? '');
+      final list = rows.map((r) => _Referral.fromJson(r, widget.user.id)).toList();
+      if (!mounted) return;
+      setState(() {
+        _referrals = list;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
+  }
 
   List<_Referral> get _sent => _referrals.where((r) => r.isSent).toList()..sort((a, b) => b.date.compareTo(a.date));
   List<_Referral> get _received => _referrals.where((r) => !r.isSent).toList()..sort((a, b) => b.date.compareTo(a.date));
@@ -92,8 +147,9 @@ class _AgentReferralsScreenState extends State<AgentReferralsScreen> with Single
       backgroundColor: AppColors.cloud,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => _SendReferralSheet(
-        onSend: (referral) => setState(() => _referrals.insert(0, referral)),
+        onSend: (_) => _loadReferrals(),
         currentUserId: widget.user.id,
+        userToken: widget.user.token ?? '',
       ),
     );
   }
@@ -126,13 +182,18 @@ class _AgentReferralsScreenState extends State<AgentReferralsScreen> with Single
         icon: const Icon(Icons.handshake_outlined),
         label: const Text('Send Referral', style: TextStyle(fontWeight: FontWeight.w800)),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _referralList(_sent, emptyText: "You haven't sent any referrals yet."),
-          _referralList(_received, emptyText: 'No referrals from other agents yet.'),
-        ],
-      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _loadReferrals,
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _referralList(_sent, emptyText: "You haven't sent any referrals yet."),
+                  _referralList(_received, emptyText: 'No referrals from other agents yet.'),
+                ],
+              ),
+            ),
     );
   }
 
@@ -253,9 +314,14 @@ class _ReferralCard extends StatelessWidget {
 }
 
 class _SendReferralSheet extends StatefulWidget {
-  const _SendReferralSheet({required this.onSend, required this.currentUserId});
+  const _SendReferralSheet({
+    required this.onSend,
+    required this.currentUserId,
+    required this.userToken,
+  });
   final ValueChanged<_Referral> onSend;
   final String currentUserId;
+  final String userToken;
 
   @override
   State<_SendReferralSheet> createState() => _SendReferralSheetState();
@@ -272,6 +338,7 @@ class _SendReferralSheetState extends State<_SendReferralSheet> {
   final AgentService _agentService = AgentService();
   List<Broker> _brokers = const [];
   bool _loading = true;
+  bool _submitting = false;
   String? _error;
 
   @override
@@ -310,24 +377,30 @@ class _SendReferralSheetState extends State<_SendReferralSheet> {
     super.dispose();
   }
 
-  bool get _canSend => _broker != null && _nameController.text.trim().isNotEmpty && _phoneController.text.trim().isNotEmpty;
+  bool get _canSend => !_submitting && _broker != null && _nameController.text.trim().isNotEmpty && _phoneController.text.trim().isNotEmpty;
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_canSend) return;
-    widget.onSend(_Referral(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      isSent: true,
-      counterpartName: '${_broker!.name} — ${_broker!.company}',
-      clientName: _nameController.text.trim(),
-      clientPhone: _phoneController.text.trim(),
-      category: _category,
-      feePercent: _fee,
-      status: _ReferralStatus.pending,
-      date: DateTime.now(),
-      notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-    ));
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Referral sent.')));
+    setState(() => _submitting = true);
+    try {
+      final res = await _agentService.sendReferral(
+        receiverId: _broker!.id,
+        clientName: _nameController.text.trim(),
+        clientPhone: _phoneController.text.trim(),
+        categorySlug: _category.slug,
+        feePercent: _fee,
+        notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+        token: widget.userToken,
+      );
+      if (!mounted) return;
+      widget.onSend(_Referral.fromJson(res, widget.currentUserId));
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Referral sent & saved.')));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
   }
 
   @override
