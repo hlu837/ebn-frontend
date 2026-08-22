@@ -4,12 +4,14 @@ import '../models/asset.dart';
 import '../models/sell_request.dart';
 import '../providers/sell_request_controller.dart';
 import '../theme/app_theme.dart';
+import '../utils/media_encoding.dart';
 import '../widgets/app_buttons.dart';
 
 /// The Agent/Broker's in-person inspection report — photos and
 /// written notes about the property — submitted for Admin's final
-/// approval before it goes live. No real camera/file picker in this
-/// frontend-only demo: "Add photo" just appends a mock thumbnail.
+/// approval before it goes live. "Add photo" opens the gallery picker and
+/// stores each photo inline (see `media_encoding.dart` for why — there's
+/// no upload/storage backend yet).
 class AgentPropertyReportScreen extends StatefulWidget {
   const AgentPropertyReportScreen({super.key, required this.request});
 
@@ -24,7 +26,8 @@ class _AgentPropertyReportScreenState extends State<AgentPropertyReportScreen> {
   final _notesController = TextEditingController();
   final List<ReportMediaItem> _media = [];
   bool _isSubmitting = false;
-  int _mockId = 1;
+  bool _isAddingMedia = false;
+  int _nextMediaId = 1;
 
   @override
   void initState() {
@@ -39,8 +42,29 @@ class _AgentPropertyReportScreenState extends State<AgentPropertyReportScreen> {
     super.dispose();
   }
 
-  void _addMedia() {
-    setState(() => _media.add(ReportMediaItem(id: 'm${_mockId++}')));
+  void _addMedia() async {
+    setState(() => _isAddingMedia = true);
+    try {
+      final encoded = await pickAndEncodeImage();
+      if (encoded != null) {
+        setState(() => _media.add(ReportMediaItem(
+              id: 'm${_nextMediaId++}',
+              filePath: encoded,
+            )));
+      }
+    } on FormatException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not pick image: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isAddingMedia = false);
+    }
   }
 
   void _removeMedia(String id) {
@@ -188,7 +212,8 @@ class _AgentPropertyReportScreenState extends State<AgentPropertyReportScreen> {
               _AddMediaButton(
                   icon: Icons.add_a_photo_outlined,
                   label: 'Photo',
-                  onTap: _addMedia),
+                  isLoading: _isAddingMedia,
+                  onTap: _isAddingMedia ? null : _addMedia),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -245,8 +270,18 @@ class _MediaThumb extends StatelessWidget {
               color: AppColors.ink,
               borderRadius: BorderRadius.circular(AppRadii.md)),
           alignment: Alignment.center,
-          child: const Icon(Icons.image_rounded,
-              color: AppColors.primaryYellow, size: 26),
+          child: dataUrlOrNetworkImage(item.filePath) != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadii.md),
+                  child: Image(
+                    image: dataUrlOrNetworkImage(item.filePath)!,
+                    width: 76,
+                    height: 76,
+                    fit: BoxFit.cover,
+                  ),
+                )
+              : const Icon(Icons.image_rounded,
+                  color: AppColors.primaryYellow, size: 26),
         ),
         Positioned(
           top: -6,
@@ -271,10 +306,14 @@ class _MediaThumb extends StatelessWidget {
 
 class _AddMediaButton extends StatelessWidget {
   const _AddMediaButton(
-      {required this.icon, required this.label, required this.onTap});
+      {required this.icon,
+      required this.label,
+      required this.onTap,
+      this.isLoading = false});
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -291,18 +330,24 @@ class _AddMediaButton extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppRadii.md),
               border: Border.all(color: AppColors.border, width: 1.4)),
           alignment: Alignment.center,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: AppColors.ink, size: 20),
-              const SizedBox(height: 4),
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink)),
-            ],
-          ),
+          child: isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: AppColors.ink, size: 20),
+                    const SizedBox(height: 4),
+                    Text(label,
+                        style: const TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.ink)),
+                  ],
+                ),
         ),
       ),
     );

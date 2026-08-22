@@ -99,8 +99,6 @@ class MachineryDetails {
 
   // ── 5. Media Upload & Verification ──────────────────────────────────
   int photoCount;
-  int videoCount;
-  String videoLink;
 
   MachineryDetails({
     this.category = MachineryCategory.excavator,
@@ -118,8 +116,6 @@ class MachineryDetails {
     Set<MachineryFinancingOption>? financingOptions,
     this.preApprovedPercentage,
     this.photoCount = 0,
-    this.videoCount = 0,
-    this.videoLink = '',
   }) : financingOptions = financingOptions ?? {};
 
   /// JSON sent to the backend (`machinery_details` jsonb column on
@@ -142,8 +138,6 @@ class MachineryDetails {
         'financingOptions': financingOptions.map((f) => f.name).toList(),
         'preApprovedPercentage': preApprovedPercentage,
         'photoCount': photoCount,
-        'videoCount': videoCount,
-        'videoLink': videoLink,
       };
 
   /// Renders every answer into a readable block — this is what backs the
@@ -176,8 +170,6 @@ class MachineryDetails {
     buffer.writeln();
     buffer.writeln('Media Upload & Verification');
     buffer.writeln('• Photos attached: $photoCount');
-    buffer.writeln('• Videos attached: $videoCount');
-    if (videoLink.trim().isNotEmpty) buffer.writeln('• Video link: $videoLink');
     return buffer.toString().trim();
   }
 }

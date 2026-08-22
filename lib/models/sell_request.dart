@@ -88,18 +88,17 @@ extension SellRequestStatusX on SellRequestStatus {
       };
 }
 
-/// A photo/video attached to an inspection report. Supports both mock items
+/// A photo attached to an inspection report. Supports both mock items
 /// for demo purposes and real file paths when a real image picker is used.
 class ReportMediaItem {
   final String id;
-  final bool isVideo;
   final String? filePath; // Optional: actual file path when using real image picker
-  const ReportMediaItem({required this.id, this.isVideo = false, this.filePath});
+  const ReportMediaItem({required this.id, this.filePath});
 
   factory ReportMediaItem.fromJson(Map<String, dynamic> json) =>
-      ReportMediaItem(id: json['id'] as String, isVideo: json['isVideo'] as bool? ?? false, filePath: json['filePath'] as String?);
+      ReportMediaItem(id: json['id'] as String, filePath: json['filePath'] as String?);
 
-  Map<String, dynamic> toJson() => {'id': id, 'isVideo': isVideo, 'filePath': filePath};
+  Map<String, dynamic> toJson() => {'id': id, 'filePath': filePath};
 }
 
 /// One end-to-end "sell my property" submission.

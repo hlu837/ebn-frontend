@@ -98,7 +98,9 @@ class _AffiliateAccountSettingsScreenState extends State<AffiliateAccountSetting
       return;
     }
 
-    final newAccountNumber = _newAccountNumberController.text.trim();
+    // Strip spaces/dashes so numbers copied from a bank app/statement
+    // (e.g. "1000 2345 6789" or "1000-2345-6789") still validate.
+    final newAccountNumber = _newAccountNumberController.text.replaceAll(RegExp(r'[\s-]'), '').trim();
     if (_editingAccountNumber && newAccountNumber.isEmpty) {
       AppToast.showError(context, 'Enter an account number, or tap Cancel.');
       return;

@@ -5,6 +5,7 @@ import '../models/auth_response.dart';
 import '../providers/favorites_controller.dart';
 import '../services/asset_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/media_encoding.dart';
 import 'asset_detail_screen.dart';
 
 const _kAccentRed = Color(0xFFFF2686);
@@ -198,15 +199,12 @@ class _FavoriteAssetCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (asset.imageUrl != null)
-                    Image.network(
-                      asset.imageUrl!,
+                  if (dataUrlOrNetworkImage(asset.imageUrl) != null)
+                    Image(
+                      image: dataUrlOrNetworkImage(asset.imageUrl)!,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stack) =>
                           Container(color: AppColors.primaryYellow.withOpacity(0.18)),
-                      loadingBuilder: (context, child, progress) => progress == null
-                          ? child
-                          : Container(color: AppColors.primaryYellow.withOpacity(0.18)),
                     )
                   else
                     Container(color: AppColors.primaryYellow.withOpacity(0.18)),

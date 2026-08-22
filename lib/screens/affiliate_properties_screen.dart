@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import '../models/asset.dart';
 import '../models/auth_response.dart';
 import '../services/asset_service.dart';
-import '../services/mock_asset_data.dart';
 import '../theme/app_theme.dart';
+import '../utils/media_encoding.dart';
 import '../widgets/app_buttons.dart';
 import 'affiliate_earnings_screen.dart';
 import 'affiliate_referrals_screen.dart';
@@ -14,10 +14,6 @@ const _kAccentRed = AppColors.primaryYellow;
 /// Full, searchable/filterable catalog of shareable listings for the
 /// Affiliater role — the "View All" / "Assets" destination the dashboard's
 /// Top Properties rail only shows a preview of.
-///
-/// Commission % is derived per-asset the same simple way the dashboard
-/// preview does (alternating 2.0 / 2.5) since there's no real commission
-/// schedule from the backend yet — see the TODO on [AffiliaterHomeScreen].
 class AffiliatePropertiesScreen extends StatefulWidget {
   const AffiliatePropertiesScreen({super.key, required this.user});
 
@@ -35,10 +31,9 @@ class _AffiliatePropertiesScreenState extends State<AffiliatePropertiesScreen> {
 
   final AssetService _assetService = AssetService();
 
-  // Painted instantly from the bundled mock list so this page is never
-  // empty on first frame, then swapped for the real `GET /api/assets`
-  // response the moment it lands.
-  List<Asset> _allAssets = List.of(kMockCompanyAssets);
+  List<Asset> _allAssets = [];
+  bool _loading = true;
+  bool _loadFailed = false;
 
   @override
   void initState() {
@@ -47,12 +42,23 @@ class _AffiliatePropertiesScreenState extends State<AffiliatePropertiesScreen> {
   }
 
   Future<void> _loadAssets() async {
+    setState(() {
+      _loading = true;
+      _loadFailed = false;
+    });
     try {
       final assets = await _assetService.fetchAssets(limit: 200);
       if (!mounted) return;
-      setState(() => _allAssets = assets);
+      setState(() {
+        _allAssets = assets;
+        _loading = false;
+      });
     } on AssetException catch (_) {
-      // Backend down / unreachable — keep showing the bundled mock listings.
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadFailed = true;
+      });
     }
   }
 
@@ -61,8 +67,6 @@ class _AffiliatePropertiesScreenState extends State<AffiliatePropertiesScreen> {
     _searchController.dispose();
     super.dispose();
   }
-
-  double _commissionFor(int index) => index.isEven ? 2.0 : 2.5;
 
   List<Asset> get _filtered {
     var list = _allAssets.where((a) => a.status == AssetStatus.active);
@@ -150,25 +154,28 @@ class _AffiliatePropertiesScreenState extends State<AffiliatePropertiesScreen> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Expanded(
-            child: filtered.isEmpty
-                ? const _EmptyProperties()
-                : GridView.builder(
-                    padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xl),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: AppSpacing.md,
-                      crossAxisSpacing: AppSpacing.md,
-                      childAspectRatio: 0.60,
-                    ),
-                    itemCount: filtered.length,
-                    itemBuilder: (context, i) => _PropertyGridCard(
-                      asset: filtered[i],
-                      commissionPercent: _commissionFor(i),
-                      onGenerateLink: () => _generateLink(filtered[i]),
-                    ),
-                  ),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _loadFailed
+                    ? _LoadFailed(onRetry: _loadAssets)
+                    : filtered.isEmpty
+                        ? const _EmptyProperties()
+                        : GridView.builder(
+                            padding: const EdgeInsets.fromLTRB(AppSpacing.lg,
+                                0, AppSpacing.lg, AppSpacing.xl),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              mainAxisSpacing: AppSpacing.md,
+                              crossAxisSpacing: AppSpacing.md,
+                              childAspectRatio: 0.60,
+                            ),
+                            itemCount: filtered.length,
+                            itemBuilder: (context, i) => _PropertyGridCard(
+                              asset: filtered[i],
+                              onGenerateLink: () => _generateLink(filtered[i]),
+                            ),
+                          ),
           ),
         ],
       ),
@@ -325,13 +332,9 @@ class _CategoryChip extends StatelessWidget {
 }
 
 class _PropertyGridCard extends StatelessWidget {
-  const _PropertyGridCard(
-      {required this.asset,
-      required this.commissionPercent,
-      required this.onGenerateLink});
+  const _PropertyGridCard({required this.asset, required this.onGenerateLink});
 
   final Asset asset;
-  final double commissionPercent;
   final VoidCallback onGenerateLink;
 
   @override
@@ -346,34 +349,12 @@ class _PropertyGridCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Stack(
-            children: [
-              AspectRatio(
-                aspectRatio: 16 / 11,
-                child: asset.imageUrl != null
-                    ? Image.network(asset.imageUrl!,
-                        fit: BoxFit.cover, width: double.infinity)
-                    : Container(color: AppColors.border),
-              ),
-              Positioned(
-                top: 8,
-                left: 8,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                      color: AppColors.success,
-                      borderRadius: BorderRadius.circular(AppRadii.pill)),
-                  child: Text(
-                    'Earn ${commissionPercent.toStringAsFixed(0)}%',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w800),
-                  ),
-                ),
-              ),
-            ],
+          AspectRatio(
+            aspectRatio: 16 / 11,
+            child: dataUrlOrNetworkImage(asset.imageUrl) != null
+                ? Image(image: dataUrlOrNetworkImage(asset.imageUrl)!,
+                    fit: BoxFit.cover, width: double.infinity)
+                : Container(color: AppColors.border),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
@@ -422,6 +403,40 @@ class _PropertyGridCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _LoadFailed extends StatelessWidget {
+  const _LoadFailed({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_outlined,
+                size: 40, color: AppColors.slate),
+            const SizedBox(height: AppSpacing.md),
+            const Text("Couldn't load properties.",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, color: AppColors.ink)),
+            const SizedBox(height: AppSpacing.md),
+            TextButton(
+              onPressed: onRetry,
+              child: const Text('Retry',
+                  style: TextStyle(
+                      color: _kAccentRed, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
       ),
     );
   }

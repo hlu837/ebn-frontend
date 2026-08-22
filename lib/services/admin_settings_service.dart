@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../models/admin_settings_models.dart';
+import '../models/investor_membership_plan.dart';
 import '../models/membership_pricing_models.dart';
 
 /// Thrown for any admin-settings call the backend rejects. [message] is
@@ -253,6 +254,39 @@ class AdminSettingsService {
       token: token,
     );
     return MembershipTierPrice.fromJson(json);
+  }
+
+  // ── Investor Membership Plan ────────────────────────────────────────────
+
+  /// GET /api/admin-settings/investor-membership-plan
+  Future<InvestorMembershipPlan> fetchInvestorMembershipPlan(
+      {required String token}) async {
+    final json = await _get('/api/admin-settings/investor-membership-plan',
+        token: token);
+    return InvestorMembershipPlan.fromJson(json);
+  }
+
+  /// PUT /api/admin-settings/investor-membership-plan
+  Future<InvestorMembershipPlan> updateInvestorMembershipPlan({
+    required String title,
+    required String description,
+    required double priceEtb,
+    required List<String> benefits,
+    required String footerNote,
+    required String token,
+  }) async {
+    final json = await _put(
+      '/api/admin-settings/investor-membership-plan',
+      {
+        'title': title,
+        'description': description,
+        'priceEtb': priceEtb,
+        'benefits': benefits,
+        'footerNote': footerNote,
+      },
+      token: token,
+    );
+    return InvestorMembershipPlan.fromJson(json);
   }
 
   // ── HTTP helpers — mirrors AdminService's _get/_patch/_decode ────────

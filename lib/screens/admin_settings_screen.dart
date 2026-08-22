@@ -5,6 +5,7 @@ import 'admin_app_content_screen.dart';
 import 'admin_categories_screen.dart';
 import 'admin_cities_screen.dart';
 import 'admin_general_settings_screen.dart';
+import 'admin_investor_membership_plan_screen.dart';
 import 'admin_membership_pricing_screen.dart';
 
 /// Sectioned settings list. Each row pushes to its real, backend-backed
@@ -52,6 +53,14 @@ class AdminSettingsScreen extends StatelessWidget {
                   label: 'Membership Pricing',
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => AdminMembershipPricingScreen(token: token),
+                  )),
+                ),
+                _SettingsItem(
+                  icon: Icons.trending_up_rounded,
+                  label: 'Investor Membership Plan',
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) =>
+                        AdminInvestorMembershipPlanScreen(token: token),
                   )),
                 ),
               ],

@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'role_select_screen.dart';
 import 'login_screen.dart';
 import 'category_listing_screen.dart';
 import 'broker_map_screen.dart';
 import 'order_request_form_screen.dart';
 import 'sell_property_form_screen.dart';
+import 'support_screen.dart';
 import '../models/asset.dart';
 import '../models/auth_response.dart';
+import '../models/company_ad.dart';
 import '../models/user_role.dart';
 import '../services/asset_service.dart';
-import '../services/mock_asset_data.dart';
+import '../services/company_ad_service.dart';
+import '../utils/media_encoding.dart';
+import '../widgets/company_ad_card.dart';
 import '../widgets/order_category_sheet.dart';
 import 'asset_detail_screen.dart';
 
@@ -40,30 +45,6 @@ class QuickAction {
   const QuickAction(this.icon, this.label, {this.highlighted = false});
 }
 
-class TrendingAd {
-  final String imageUrl;
-  final String price;
-  final String title;
-  final String location;
-  final List<String> tags;
-  final String sellerName;
-  final String sellerAvatarUrl;
-  final bool isNew;
-  final AssetCategorySlug? categorySlug;
-
-  const TrendingAd({
-    required this.imageUrl,
-    required this.price,
-    required this.title,
-    required this.location,
-    required this.tags,
-    required this.sellerName,
-    required this.sellerAvatarUrl,
-    this.isNew = false,
-    this.categorySlug,
-  });
-}
-
 // ---------------------------------------------------------------------------
 // PAGE
 // ---------------------------------------------------------------------------
@@ -79,28 +60,63 @@ class EBNLandingPage extends StatefulWidget {
 
 class _EBNLandingPageState extends State<EBNLandingPage> {
   int _selectedTab = 0;
+
+  // Only used by the static fallback banner (`_buildInspectionBanner`),
+  // shown when there are no admin-authored company ads yet.
   final int _bannerIndex = 0;
 
   final AssetService _assetService = AssetService();
+  final CompanyAdService _companyAdService = CompanyAdService();
 
-  // Painted instantly from the bundled mock list so trending tiles always
-  // have something to open, then swapped for the real `GET /api/assets`
-  // response the moment it lands.
-  List<Asset> _assets = List.of(kMockCompanyAssets);
+  // Empty until the real `GET /api/assets` response lands — the trending
+  // section shows a loading/empty state rather than made-up listings in
+  // the meantime.
+  List<Asset> _assets = [];
+  bool _assetsLoading = true;
+
+  // Admin-authored ad cards for the promo carousel (was a single static
+  // "Order Verified Inspection" card — see `_buildInspectionBanner`,
+  // now `_CompanyAdsCarousel`). Empty list until the real
+  // `GET /api/company-ads` response lands.
+  List<CompanyAd> _companyAds = [];
+  bool _companyAdsLoading = true;
 
   @override
   void initState() {
     super.initState();
     _loadAssets();
+    _loadCompanyAds();
+  }
+
+  Future<void> _loadCompanyAds() async {
+    try {
+      final ads = await _companyAdService.list();
+      if (!mounted) return;
+      setState(() {
+        _companyAds = ads;
+        _companyAdsLoading = false;
+      });
+    } on CompanyAdException catch (_) {
+      // Backend down / unreachable — stop the spinner and fall back to
+      // the static inspection banner rather than showing nothing.
+      if (!mounted) return;
+      setState(() => _companyAdsLoading = false);
+    }
   }
 
   Future<void> _loadAssets() async {
     try {
       final assets = await _assetService.fetchAssets(limit: 200);
       if (!mounted) return;
-      setState(() => _assets = assets);
+      setState(() {
+        _assets = assets;
+        _assetsLoading = false;
+      });
     } on AssetException catch (_) {
-      // Backend down / unreachable — keep showing the bundled mock listings.
+      // Backend down / unreachable — stop the spinner and show the
+      // "no listings" empty state rather than fabricated data.
+      if (!mounted) return;
+      setState(() => _assetsLoading = false);
     }
   }
 
@@ -120,50 +136,6 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
     QuickAction(Icons.landscape_outlined, 'Land'),
     QuickAction(Icons.swap_horiz, 'Materials'),
     QuickAction(Icons.groups_outlined, 'Brokers'),
-  ];
-
-  final List<TrendingAd> _ads = const [
-    TrendingAd(
-      imageUrl: 'https://picsum.photos/seed/ebn-house/400/300',
-      price: 'ETB 45,000',
-      title: 'Modern luxury family home with garden',
-      location: 'Addis Ababa',
-      tags: ['4 bd', '3 ba'],
-      sellerName: 'Biniam T.',
-      sellerAvatarUrl: 'https://i.pravatar.cc/64?img=12',
-      isNew: true,
-      categorySlug: AssetCategorySlug.house,
-    ),
-    TrendingAd(
-      imageUrl: 'https://picsum.photos/seed/ebn-car/400/300',
-      price: 'ETB 4.2M',
-      title: '2022 Toyota Camry SE Dark Gray',
-      location: 'Bole, Addis Ababa',
-      tags: ['Used', 'Auto'],
-      sellerName: 'Samuel L.',
-      sellerAvatarUrl: 'https://i.pravatar.cc/64?img=33',
-      categorySlug: AssetCategorySlug.vehicles,
-    ),
-    TrendingAd(
-      imageUrl: 'https://picsum.photos/seed/ebn-excavator/400/300',
-      price: 'ETB 18.5M',
-      title: 'CAT 320 Excavator Heavy Duty',
-      location: 'Addis Ababa',
-      tags: ['Heavy', '2021'],
-      sellerName: 'Equip Sales',
-      sellerAvatarUrl: 'https://i.pravatar.cc/64?img=5',
-      categorySlug: AssetCategorySlug.machinery,
-    ),
-    TrendingAd(
-      imageUrl: 'https://picsum.photos/seed/ebn-studio/400/300',
-      price: 'ETB 18,000',
-      title: 'Studio near Bole Rd - Furnished',
-      location: 'Bole, Addis Ababa',
-      tags: ['1 bd', 'WiFi'],
-      sellerName: 'Hanna M.',
-      sellerAvatarUrl: 'https://i.pravatar.cc/64?img=45',
-      categorySlug: AssetCategorySlug.house,
-    ),
   ];
 
   void _goToCategory(AssetCategorySlug slug, String label, IconData icon) {
@@ -297,7 +269,12 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
             _buildSearchBar(),
             _buildTabs(),
             _buildSafetyBanner(),
-            _buildInspectionBanner(),
+            if (_companyAdsLoading)
+              const SizedBox.shrink()
+            else if (_companyAds.isNotEmpty)
+              _CompanyAdsCarousel(ads: _companyAds)
+            else
+              _buildInspectionBanner(),
             const SizedBox(height: 24),
             _buildQuickActions(),
             const SizedBox(height: 8),
@@ -355,9 +332,10 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
               icon: Icons.help_outline,
               label: 'Support',
               onTap: () {
-                // Support action - can be connected to support screen later
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Support feature coming soon')),
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SupportScreen(user: _kGuestUser),
+                  ),
                 );
               },
             ),
@@ -633,19 +611,13 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
                 flex: 5,
                 child: SizedBox(
                   height: 190,
-                  child: Image.network(
-                    'https://picsum.photos/seed/ebn-inspector/300/300',
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: Colors.grey[800],
-                        child: const Icon(
-                          Icons.verified,
-                          color: Colors.white54,
-                          size: 48,
-                        ),
-                      );
-                    },
+                  child: Container(
+                    color: Colors.grey[850],
+                    child: const Icon(
+                      Icons.verified,
+                      color: Colors.white54,
+                      size: 48,
+                    ),
                   ),
                 ),
               ),
@@ -848,6 +820,23 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
   static const double _kTrendingGridSpacing = 16;
 
   Widget _buildTrendingGrid() {
+    if (_assetsLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 32),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_assets.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: Text(
+          'No listings yet — check back soon.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: EBNColors.grey, fontSize: 13),
+        ),
+      );
+    }
+    final trending = _assets.take(4).toList();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: LayoutBuilder(
@@ -857,24 +846,19 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
             spacing: _kTrendingGridSpacing,
             runSpacing: 20,
             children: [
-              for (final ad in _ads)
+              for (final asset in trending)
                 SizedBox(
                   width: cardWidth,
                   child: GestureDetector(
                     onTap: () {
-                      if (_assets.isEmpty) return;
-                      final mockAsset = _assets.firstWhere(
-                        (a) => a.category == ad.categorySlug,
-                        orElse: () => _assets.first,
-                      );
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => AssetDetailScreen(
-                              asset: mockAsset, user: _kGuestUser),
+                          builder: (_) =>
+                              AssetDetailScreen(asset: asset, user: _kGuestUser),
                         ),
                       );
                     },
-                    child: _AdCard(ad: ad),
+                    child: _AdCard(asset: asset),
                   ),
                 ),
             ],
@@ -943,15 +927,164 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
 }
 
 // ---------------------------------------------------------------------------
+// COMPANY ADS CAROUSEL
+// ---------------------------------------------------------------------------
+
+/// Horizontally-scrollable carousel of admin-authored company ad cards,
+/// replacing the old static "Order Verified Inspection" promo. Each ad
+/// carries a title, description, image, and an optional link (set up
+/// from the admin side — see `AdminCompanyAdsScreen`).
+///
+/// Tapping a card: if it has a link, open it (external browser); if it
+/// doesn't, zoom the image full-screen instead.
+class _CompanyAdsCarousel extends StatefulWidget {
+  const _CompanyAdsCarousel({required this.ads});
+
+  final List<CompanyAd> ads;
+
+  @override
+  State<_CompanyAdsCarousel> createState() => _CompanyAdsCarouselState();
+}
+
+class _CompanyAdsCarouselState extends State<_CompanyAdsCarousel> {
+  late final PageController _controller;
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController(viewportFraction: 0.92);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleTap(CompanyAd ad) async {
+    final link = ad.linkUrl;
+    if (link != null && link.trim().isNotEmpty) {
+      final uri = Uri.tryParse(link.trim());
+      if (uri != null && await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't open that link.")),
+        );
+      }
+      return;
+    }
+    // No link attached — zoom the image instead.
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (_) => _AdImageZoomDialog(imageUrl: ad.imageUrl),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(
+      children: [
+        SizedBox(
+          height: 190,
+          child: PageView.builder(
+            controller: _controller,
+            itemCount: widget.ads.length,
+            onPageChanged: (i) => setState(() => _index = i),
+            itemBuilder: (context, i) {
+              final ad = widget.ads[i];
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: CompanyAdCard.fromAd(ad, onTap: () => _handleTap(ad)),
+              );
+            },
+          ),
+        ),
+        if (widget.ads.length > 1) ...[
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(widget.ads.length, (i) {
+              final active = i == _index;
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: active ? 16 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: active
+                      ? EBNColors.red
+                      : EBNColors.grey.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              );
+            }),
+          ),
+        ],
+      ],
+      ),
+    );
+  }
+}
+
+
+/// Full-screen, pinch-to-zoom image viewer shown when a company ad has no
+/// link attached — tapping the card zooms the image instead of navigating.
+class _AdImageZoomDialog extends StatelessWidget {
+  const _AdImageZoomDialog({required this.imageUrl});
+
+  final String imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = dataUrlOrNetworkImage(imageUrl);
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(12),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: InteractiveViewer(
+              minScale: 1,
+              maxScale: 4,
+              child: image != null
+                  ? Image(image: image, fit: BoxFit.contain)
+                  : const Icon(Icons.broken_image_outlined,
+                      color: Colors.white54, size: 64),
+            ),
+          ),
+          Positioned(
+            top: 4,
+            right: 4,
+            child: IconButton(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // AD CARD WIDGET
 // ---------------------------------------------------------------------------
 
 class _AdCard extends StatelessWidget {
-  final TrendingAd ad;
-  const _AdCard({required this.ad});
+  final Asset asset;
+  const _AdCard({required this.asset});
+
+  bool get _isNew => (asset.postedLabel ?? '').toLowerCase().contains('new');
 
   @override
   Widget build(BuildContext context) {
+    final imageUrl = asset.imageUrl;
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -966,22 +1099,31 @@ class _AdCard extends StatelessWidget {
             children: [
               AspectRatio(
                 aspectRatio: 1.2,
-                child: Image.network(
-                  ad.imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: Colors.grey[200],
-                      child: const Icon(
-                        Icons.image,
-                        color: Colors.grey,
-                        size: 36,
+                child: dataUrlOrNetworkImage(imageUrl) == null
+                    ? Container(
+                        color: Colors.grey[200],
+                        child: const Icon(
+                          Icons.image,
+                          color: Colors.grey,
+                          size: 36,
+                        ),
+                      )
+                    : Image(
+                        image: dataUrlOrNetworkImage(imageUrl)!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: Colors.grey[200],
+                            child: const Icon(
+                              Icons.image,
+                              color: Colors.grey,
+                              size: 36,
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
-              if (ad.isNew)
+              if (_isNew)
                 Positioned(
                   top: 8,
                   left: 8,
@@ -1029,7 +1171,7 @@ class _AdCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  ad.price,
+                  asset.formattedPrice,
                   style: const TextStyle(
                     color: EBNColors.green,
                     fontWeight: FontWeight.w800,
@@ -1038,7 +1180,7 @@ class _AdCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  ad.title,
+                  asset.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -1058,7 +1200,7 @@ class _AdCard extends StatelessWidget {
                     const SizedBox(width: 2),
                     Expanded(
                       child: Text(
-                        ad.location,
+                        asset.city ?? asset.addressLine ?? '',
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 11,
@@ -1068,26 +1210,17 @@ class _AdCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 9,
-                      backgroundImage: NetworkImage(ad.sellerAvatarUrl),
+                if (asset.specLine.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    asset.specLine,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.black87,
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        ad.sellerName,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ],
             ),
           ),

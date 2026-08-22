@@ -398,21 +398,9 @@ class _TierPickerSheet extends StatelessWidget {
     return tierOrder.sublist(currentIndex + 1);
   }
 
-  List<AgentTier> _downgradeTargets(AgentTier currentTier) {
-    const tierOrder = <AgentTier>[
-      AgentTier.bronze,
-      AgentTier.silver,
-      AgentTier.gold
-    ];
-    final currentIndex = tierOrder.indexOf(currentTier);
-    if (currentIndex <= 0) return const [];
-    return tierOrder.sublist(0, currentIndex).reversed.toList();
-  }
-
   @override
   Widget build(BuildContext context) {
     final upgradeTargets = _upgradeTargets(currentTier);
-    final downgradeTargets = _downgradeTargets(currentTier);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -451,24 +439,6 @@ class _TierPickerSheet extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
             ],
           ],
-          if (downgradeTargets.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.md),
-            const Text('Downgrade options',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.slate,
-                    letterSpacing: 0.6)),
-            const SizedBox(height: AppSpacing.sm),
-            for (final tier in downgradeTargets) ...[
-              _TierOptionRow(
-                  tier: tier,
-                  selected: tier == currentTier,
-                  currentTier: currentTier,
-                  onTap: () => onSelect(tier)),
-              const SizedBox(height: AppSpacing.sm),
-            ],
-          ],
           const SizedBox(height: AppSpacing.md),
         ],
       ),
@@ -496,7 +466,6 @@ class _TierOptionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fee = _kTierMonthlyFeeEtb[tier] ?? 0;
-    final isDowngrade = currentTier != null && tier.index < currentTier!.index;
     final isUpgrade = currentTier != null && tier.index > currentTier!.index;
     return Material(
       color: Colors.transparent,
@@ -529,23 +498,6 @@ class _TierOptionRow extends StatelessWidget {
                                 color: AppColors.ink)),
                         if (selected)
                           const SizedBox(width: 8)
-                        else if (isDowngrade)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.slate.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text('Downgrade',
-                                  style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.slate)),
-                            ),
-                          )
                         else if (isUpgrade)
                           Padding(
                             padding: const EdgeInsets.only(left: 8),

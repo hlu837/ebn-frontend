@@ -46,6 +46,45 @@ class ReferralItem {
   bool get isPending => status == 'pending';
 }
 
+/// A promotional campaign the Affiliater can join and share.
+/// Backed by `GET /api/affiliates/campaigns` / the `affiliate_campaigns`
+/// table — `icon` is a Material icon key string (e.g. `wb_sunny_outlined`)
+/// the client maps to an actual `IconData`.
+class AffiliateCampaign {
+  final String id;
+  final String title;
+  final String description;
+  final String badge;
+  final String icon;
+  final String status; // 'upcoming' | 'active' | 'ended'
+  final DateTime? startsAt;
+  final DateTime? endsAt;
+
+  const AffiliateCampaign({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.badge,
+    required this.icon,
+    required this.status,
+    this.startsAt,
+    this.endsAt,
+  });
+
+  factory AffiliateCampaign.fromJson(Map<String, dynamic> json) {
+    return AffiliateCampaign(
+      id: json['id'] as String,
+      title: json['title'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      badge: json['badge'] as String? ?? '',
+      icon: json['icon'] as String? ?? 'campaign',
+      status: json['status'] as String? ?? 'upcoming',
+      startsAt: json['startsAt'] != null ? DateTime.tryParse(json['startsAt'] as String) : null,
+      endsAt: json['endsAt'] != null ? DateTime.tryParse(json['endsAt'] as String) : null,
+    );
+  }
+}
+
 class EarningsSummary {
   final double totalEarned;
   final double pending;
@@ -406,6 +445,13 @@ class AffiliateService {
     final res = await _getRaw('/api/affiliates/me/payouts', token: token);
     final list = jsonDecode(res.body) as List<dynamic>;
     return list.map((item) => PayoutItem.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
+  /// GET /api/affiliates/campaigns — fetches active/upcoming/ended promo campaigns.
+  Future<List<AffiliateCampaign>> getCampaigns(String token) async {
+    final res = await _getRaw('/api/affiliates/campaigns', token: token);
+    final list = jsonDecode(res.body) as List<dynamic>;
+    return list.map((item) => AffiliateCampaign.fromJson(item as Map<String, dynamic>)).toList();
   }
 
   /// GET /api/affiliates/me/notifications — fetches the affiliate's notification feed.

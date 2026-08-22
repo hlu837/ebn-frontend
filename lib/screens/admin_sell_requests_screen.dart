@@ -4,6 +4,7 @@ import '../models/asset.dart';
 import '../models/sell_request.dart';
 import '../providers/sell_request_controller.dart';
 import '../theme/app_theme.dart';
+import '../utils/media_encoding.dart';
 import '../widgets/app_buttons.dart';
 
 /// Admin's queue for the "sell my property" pipeline — two stages to
@@ -171,13 +172,13 @@ class _SubmissionsTab extends StatelessWidget {
           subtitle:
               '${r.category.label} · ${r.city} · ETB ${r.askingPrice.toStringAsFixed(0)}',
           badge: r.isAgentListing ? 'Agent listing' : null,
+          media: r.reportMedia,
           detailLines: [
             r.isAgentListing
                 ? 'Agent (own listing): ${r.agentName ?? r.ownerName} · ${r.ownerPhone}'
                 : 'From: ${r.ownerName} · ${r.ownerPhone}',
             r.addressLine,
             r.description,
-            if (r.isAgentListing) '${r.reportMedia.length} photo(s)',
             if (r.isAgentListing && r.reportNotes?.isNotEmpty == true)
               r.reportNotes!,
             'Fee paid: ETB ${r.feeAmount.toStringAsFixed(0)}',
@@ -219,9 +220,9 @@ class _ReportsTab extends StatelessWidget {
           title: r.title,
           subtitle:
               '${r.category.label} · ${r.city} · ETB ${r.askingPrice.toStringAsFixed(0)}',
+          media: r.reportMedia,
           detailLines: [
             'Inspected by: ${r.agentName ?? 'Agent'}',
-            '${r.reportMedia.length} photo(s)',
             if (r.reportNotes?.isNotEmpty == true) r.reportNotes!,
           ],
           primaryLabel: 'Approve & publish listing',
@@ -242,6 +243,7 @@ class _QueueCard extends StatelessWidget {
     required this.onPrimary,
     required this.onSecondary,
     this.badge,
+    this.media = const [],
   });
 
   final String title;
@@ -251,6 +253,14 @@ class _QueueCard extends StatelessWidget {
   final VoidCallback onPrimary;
   final VoidCallback onSecondary;
   final String? badge;
+  final List<ReportMediaItem> media;
+
+  void _openViewer(BuildContext context, int startIndex) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => _MediaViewerScreen(
+          media: media, startIndex: startIndex, title: title),
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -294,6 +304,51 @@ class _QueueCard extends StatelessWidget {
           Text(subtitle,
               style: const TextStyle(fontSize: 12.5, color: AppColors.slate)),
           const SizedBox(height: 8),
+          if (media.isNotEmpty) ...[
+            SizedBox(
+              height: 76,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: media.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, i) {
+                  final item = media[i];
+                  final image = dataUrlOrNetworkImage(item.filePath);
+                  return GestureDetector(
+                    onTap: () => _openViewer(context, i),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
+                      child: Container(
+                        width: 76,
+                        height: 76,
+                        color: AppColors.cloud,
+                        child: image != null
+                            ? Image(image: image, fit: BoxFit.cover)
+                            : const Icon(Icons.broken_image_outlined,
+                                color: AppColors.slate),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.danger.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(AppRadii.sm),
+              ),
+              child: const Text('No photos attached to this submission.',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.danger,
+                      fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(height: 8),
+          ],
           for (final line in detailLines.where((l) => l.trim().isNotEmpty)) ...[
             Text(line,
                 style: const TextStyle(
@@ -322,6 +377,65 @@ class _QueueCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Full-screen swipeable viewer for a submission's photos, opened by
+/// tapping any thumbnail on a [_QueueCard].
+class _MediaViewerScreen extends StatefulWidget {
+  const _MediaViewerScreen(
+      {required this.media, required this.startIndex, required this.title});
+
+  final List<ReportMediaItem> media;
+  final int startIndex;
+  final String title;
+
+  @override
+  State<_MediaViewerScreen> createState() => _MediaViewerScreenState();
+}
+
+class _MediaViewerScreenState extends State<_MediaViewerScreen> {
+  late final PageController _controller =
+      PageController(initialPage: widget.startIndex);
+  late int _index = widget.startIndex;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text('${widget.title} · ${_index + 1}/${widget.media.length}',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+      ),
+      body: PageView.builder(
+        controller: _controller,
+        itemCount: widget.media.length,
+        onPageChanged: (i) => setState(() => _index = i),
+        itemBuilder: (context, i) {
+          final item = widget.media[i];
+          final image = dataUrlOrNetworkImage(item.filePath);
+          if (image == null) {
+            return const Center(
+              child: Icon(Icons.broken_image_outlined,
+                  color: Colors.white54, size: 48),
+            );
+          }
+          return Center(
+            child: InteractiveViewer(
+              child: Image(image: image, fit: BoxFit.contain),
+            ),
+          );
+        },
       ),
     );
   }

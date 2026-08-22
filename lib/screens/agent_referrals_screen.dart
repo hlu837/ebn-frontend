@@ -28,8 +28,8 @@ extension _ReferralStatusX on _ReferralStatus {
 /// One referral sent to, or received from, another broker on the network.
 ///
 /// TODO: replace with a real `/api/referrals` backend once the referral
-/// program has server-side support — this local, in-memory list is enough
-/// to build and test the full UI/UX in the meantime.
+/// program has server-side support. There is no seed/mock data — the list
+/// starts empty and only holds what's been sent in the current session.
 class _Referral {
   final String id;
   final bool isSent;
@@ -68,43 +68,13 @@ class AgentReferralsScreen extends StatefulWidget {
 class _AgentReferralsScreenState extends State<AgentReferralsScreen> with SingleTickerProviderStateMixin {
   late final TabController _tabController = TabController(length: 2, vsync: this);
 
-  final List<_Referral> _referrals = [
-    _Referral(
-      id: 'r1',
-      isSent: true,
-      counterpartName: 'Amanuel Tesfaye — Prime Realty',
-      clientName: 'Selam Girma',
-      clientPhone: '+251911223344',
-      category: AssetCategorySlug.apartments,
-      feePercent: 10,
-      status: _ReferralStatus.accepted,
-      date: DateTime(2026, 7, 24),
-      notes: 'Looking for a 2-bed near Bole, budget ~6M ETB.',
-    ),
-    _Referral(
-      id: 'r2',
-      isSent: false,
-      counterpartName: 'Hana Bekele — Skyline Brokers',
-      clientName: 'Yonas Alemu',
-      clientPhone: '+251922334455',
-      category: AssetCategorySlug.vehicles,
-      feePercent: 8,
-      status: _ReferralStatus.pending,
-      date: DateTime(2026, 7, 27),
-      notes: 'Wants an SUV, cash buyer.',
-    ),
-    _Referral(
-      id: 'r3',
-      isSent: true,
-      counterpartName: 'Dawit Mekonnen — Horizon Properties',
-      clientName: 'Ruth Assefa',
-      clientPhone: '+251933445566',
-      category: AssetCategorySlug.house,
-      feePercent: 10,
-      status: _ReferralStatus.closed,
-      date: DateTime(2026, 7, 2),
-    ),
-  ];
+  // No `/api/referrals` backend exists yet, so this starts empty. Referrals
+  // sent in-session via `_openSendReferralSheet` are appended to this list,
+  // but nothing here is persisted or fetched from a server — closing and
+  // reopening the screen (or the app) loses them. Swap this in-memory list
+  // for a real fetch + persisted send once the referral program has
+  // server-side support.
+  final List<_Referral> _referrals = [];
 
   List<_Referral> get _sent => _referrals.where((r) => r.isSent).toList()..sort((a, b) => b.date.compareTo(a.date));
   List<_Referral> get _received => _referrals.where((r) => !r.isSent).toList()..sort((a, b) => b.date.compareTo(a.date));

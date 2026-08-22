@@ -786,7 +786,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
                         availableOrderRequests, assignedOrderRequests),
                     AgentMenuScreen(
                       user: _currentUser,
-                      tier: AgentTier.gold,
+                      tier: _tier,
                       isOnline: _isOnline,
                       onOnlineChanged: _setOnline,
                       togglingOnline: _settingLocation || _togglingOnline,

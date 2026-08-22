@@ -7,6 +7,7 @@ import '../models/auth_response.dart';
 import '../models/chat_message.dart' as api;
 import '../services/chat_service.dart';
 import '../theme/landing_colors.dart';
+import '../utils/media_encoding.dart';
 
 /// Real two-way chat between the current user and a broker, scoped to one
 /// specific listing — backed by `/api/chat/*` (see `chat_service.dart`).
@@ -320,8 +321,8 @@ class _ListingBanner extends StatelessWidget {
             child: SizedBox(
               width: 44,
               height: 44,
-              child: imageUrl != null
-                  ? Image.network(imageUrl!,
+              child: dataUrlOrNetworkImage(imageUrl) != null
+                  ? Image(image: dataUrlOrNetworkImage(imageUrl)!,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) =>
                           Container(color: LandingColors.border))

@@ -156,7 +156,9 @@ class _AgentSettingsScreenState extends State<AgentSettingsScreen> {
   }
 
   Future<void> _savePayout() async {
-    final newAccountNumber = _newAccountNumberController.text.trim();
+    // Strip spaces/dashes so numbers copied from a bank app/statement
+    // (e.g. "1000 2345 6789" or "1000-2345-6789") still validate.
+    final newAccountNumber = _newAccountNumberController.text.replaceAll(RegExp(r'[\s-]'), '').trim();
     if (_editingAccountNumber && newAccountNumber.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

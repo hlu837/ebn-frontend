@@ -10,6 +10,7 @@ import '../services/asset_service.dart';
 import '../services/chat_service.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/media_encoding.dart';
 import '../widgets/listing_intent_sheet.dart';
 import '../widgets/order_category_sheet.dart';
 import 'asset_detail_screen.dart';
@@ -819,17 +820,41 @@ class _PicksGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: assets.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 0.60,
-      ),
-      itemBuilder: (context, i) => _PickCard(asset: assets[i], user: user),
+    // Two independent columns (left gets even indices, right gets odd)
+    // instead of a fixed-aspect-ratio GridView, so each card's height
+    // follows its own content — a short card doesn't get stretched to
+    // match a tall neighbor, and a tall card doesn't get clipped to
+    // match a short one.
+    final left = <Asset>[];
+    final right = <Asset>[];
+    for (var i = 0; i < assets.length; i++) {
+      (i.isEven ? left : right).add(assets[i]);
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            children: [
+              for (final asset in left) ...[
+                _PickCard(asset: asset, user: user),
+                const SizedBox(height: 12),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            children: [
+              for (final asset in right) ...[
+                _PickCard(asset: asset, user: user),
+                const SizedBox(height: 12),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -870,21 +895,13 @@ class _PickCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (asset.imageUrl != null)
-                    Image.network(
-                      asset.imageUrl!,
+                  if (dataUrlOrNetworkImage(asset.imageUrl) != null)
+                    Image(
+                      image: dataUrlOrNetworkImage(asset.imageUrl)!,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stack) => Container(
                         color: AppColors.primaryYellow.withValues(alpha: 0.18),
                       ),
-                      loadingBuilder: (context, child, progress) =>
-                          progress == null
-                              ? child
-                              : Container(
-                                  color: AppColors.primaryYellow.withValues(
-                                    alpha: 0.18,
-                                  ),
-                                ),
                     )
                   else
                     Container(
@@ -916,12 +933,12 @@ class _PickCard extends StatelessWidget {
                 ],
               ),
             ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                     Text(
                       asset.formattedPrice,
                       style: const TextStyle(
@@ -989,8 +1006,7 @@ class _PickCard extends StatelessWidget {
                   ],
                 ),
               ),
-            ),
-          ],
+            ],
         ),
       ),
     );

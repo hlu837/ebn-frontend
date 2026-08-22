@@ -143,12 +143,21 @@ class _AgentVisibilityProfileScreenState
   }
 
   Future<void> _pickProfilePicture() async {
-    final file = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 800,
-      maxHeight: 800,
-      imageQuality: 82,
-    );
+    XFile? file;
+    try {
+      file = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 82,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              "Couldn't open your photos. Check the app's photo permission in device settings and try again.")));
+      return;
+    }
     if (file == null || !mounted) return;
 
     setState(() => _avatarLoading = true);
@@ -182,6 +191,11 @@ class _AgentVisibilityProfileScreenState
       setState(() => _avatarLoading = false);
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _avatarLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save profile picture: $e')));
     }
   }
 

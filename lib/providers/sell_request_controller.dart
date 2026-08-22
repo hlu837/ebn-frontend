@@ -7,6 +7,26 @@ import '../models/sell_request.dart';
 import '../services/asset_service.dart';
 import '../services/sell_request_service.dart';
 
+/// Picks the cover photo for a newly-published listing from the agent's
+/// inspection report media: the first item that has a real
+/// [ReportMediaItem.filePath].
+///
+/// Since [pickAndEncodeImage] (see `media_encoding.dart`) now stores each
+/// picked photo as a self-contained `data:...;base64,...` string rather
+/// than a local device path, this is finally safe to use directly — no
+/// upload/storage backend needed, and it renders identically for every
+/// visitor via [dataUrlOrNetworkImage]. Returns null only when the report
+/// genuinely has no usable photo, so the listing falls back to the asset
+/// card's default placeholder instead of showing nothing was checked.
+String? _coverImageFromReport(List<ReportMediaItem> media) {
+  for (final item in media) {
+    if (item.filePath != null && item.filePath!.isNotEmpty) {
+      return item.filePath;
+    }
+  }
+  return null;
+}
+
 /// Single source of truth for every "sell my property" submission — backed
 /// by the real `/api/sell-requests/*` backend. Keeps a local cache so every
 /// side (Visitor / Admin / Agent) watching this one instance still reads
@@ -44,10 +64,11 @@ class SellRequestController extends ChangeNotifier {
   }
 
   // ── Visitor ──────────────────────────────────────────────────────────
-  /// Submits a new property for sale. Payment is mocked — in this demo the
-  /// 100 ETB fee is treated as paid the moment this is called (the UI
-  /// shows a mock "processing payment" step before calling this) — but the
-  /// submission itself is now persisted for real via the backend.
+  /// Submits a new property for sale. The 100 ETB listing fee is paid via
+  /// a real Chapa checkout (launched in-browser) before this is called, and
+  /// the backend verifies the transaction via `_service.verify(txRef)`
+  /// polling — this is not mocked. The submission itself is persisted via
+  /// the backend.
   Future<SellRequest> submit({
     required String ownerUserId,
     required String ownerName,
@@ -85,7 +106,7 @@ class SellRequestController extends ChangeNotifier {
 
   // ── Agent: self-listing ─────────────────────────────────────────────
   /// An Agent submits a property they own themselves — carries its own
-  /// photos/video + written notes up front, so Admin can publish it
+  /// photos + written notes up front, so Admin can publish it
   /// directly under this Agent's name without a separate claim/inspection
   /// hand-off. Same 100 ETB fee as [submit].
   Future<SellRequest> submitAsAgent({
@@ -194,9 +215,7 @@ class SellRequestController extends ChangeNotifier {
         addressLine: r.addressLine,
         city: r.city,
         attributes: const {},
-        imageUrl: r.reportMedia.isNotEmpty
-            ? 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&q=80'
-            : null,
+        imageUrl: _coverImageFromReport(r.reportMedia),
         postedLabel: 'New · listed by ${r.agentName ?? 'agent'}',
         brokerId: r.agentId,
       );
@@ -317,9 +336,7 @@ class SellRequestController extends ChangeNotifier {
       addressLine: r.addressLine,
       city: r.city,
       attributes: const {},
-      imageUrl: r.reportMedia.isNotEmpty
-          ? 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800&q=80'
-          : null,
+      imageUrl: _coverImageFromReport(r.reportMedia),
       postedLabel: 'New · listed by ${r.agentName ?? 'agent'}',
       brokerId: r.agentId,
     );

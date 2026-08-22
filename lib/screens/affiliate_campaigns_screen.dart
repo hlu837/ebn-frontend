@@ -1,72 +1,80 @@
 import 'package:flutter/material.dart';
+import '../models/auth_response.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_buttons.dart';
+import '../services/affiliate_service.dart';
 
 const _kAccentRed = AppColors.primaryYellow;
 
-enum _CampaignStatus { active, upcoming, ended }
+/// Maps the `icon` key string the backend stores (e.g. `wb_sunny_outlined`)
+/// to a Flutter `IconData`. Keep in sync with whatever keys admins pick
+/// when creating a campaign (`POST /api/affiliates/campaigns`).
+const Map<String, IconData> _kIconByKey = {
+  'campaign': Icons.campaign_outlined,
+  'wb_sunny_outlined': Icons.wb_sunny_outlined,
+  'person_add_alt_1_outlined': Icons.person_add_alt_1_outlined,
+  'directions_car_outlined': Icons.directions_car_outlined,
+  'celebration_outlined': Icons.celebration_outlined,
+  'local_offer_outlined': Icons.local_offer_outlined,
+  'star_outline': Icons.star_outline,
+  'trending_up': Icons.trending_up,
+};
 
-class _Campaign {
-  final String title;
-  final String description;
-  final String badge;
-  final _CampaignStatus status;
-  final IconData icon;
+IconData _iconFor(String key) => _kIconByKey[key] ?? Icons.campaign_outlined;
 
-  const _Campaign({
-    required this.title,
-    required this.description,
-    required this.badge,
-    required this.status,
-    required this.icon,
-  });
+/// Promotional campaigns the Affiliater can join and share.
+/// Loaded from `GET /api/affiliates/campaigns` (see `affiliate_service.dart`
+/// / `backend/src/routes/affiliates.js`).
+class AffiliateCampaignsScreen extends StatefulWidget {
+  const AffiliateCampaignsScreen({super.key, required this.user});
+
+  final AppUser user;
+
+  @override
+  State<AffiliateCampaignsScreen> createState() => _AffiliateCampaignsScreenState();
 }
 
-/// TODO: replace with a real `GET /api/affiliates/campaigns` call once the
-/// affiliate program has a backend — the "Summer Real Estate Drive" promo
-/// on the dashboard banner is the same mock campaign shown here as the
-/// active one.
-const List<_Campaign> _kMockCampaigns = [
-  _Campaign(
-    title: 'Summer Real Estate Drive',
-    description: 'Earn double commission (4%) on every house and apartment sale you refer through August.',
-    badge: '4% Commission',
-    status: _CampaignStatus.active,
-    icon: Icons.wb_sunny_outlined,
-  ),
-  _Campaign(
-    title: 'New Agent Referral Bonus',
-    description: 'Refer a new verified agent to the platform and earn a flat 5,000 ETB bonus once they close their first deal.',
-    badge: '5,000 ETB bonus',
-    status: _CampaignStatus.active,
-    icon: Icons.person_add_alt_1_outlined,
-  ),
-  _Campaign(
-    title: 'Vehicle Marketplace Launch',
-    description: 'Special 3% commission tier on all vehicle listings, launching alongside the new vehicles category.',
-    badge: '3% Commission',
-    status: _CampaignStatus.upcoming,
-    icon: Icons.directions_car_outlined,
-  ),
-  _Campaign(
-    title: 'New Year Kickoff',
-    description: 'Boosted commission tiers to open the year strong across all categories.',
-    badge: '3.5% Commission',
-    status: _CampaignStatus.ended,
-    icon: Icons.celebration_outlined,
-  ),
-];
+class _AffiliateCampaignsScreenState extends State<AffiliateCampaignsScreen> {
+  final _affiliateService = AffiliateService();
 
-/// Promotional campaigns the Affiliater can join and share — matches the
-/// dashboard's seasonal promo banner, plus upcoming and past campaigns.
-class AffiliateCampaignsScreen extends StatelessWidget {
-  const AffiliateCampaignsScreen({super.key});
+  List<AffiliateCampaign> _campaigns = const [];
+  bool _loading = true;
+  String? _error;
+
+  String? _token() => widget.user.token != null && widget.user.token!.isNotEmpty ? widget.user.token : null;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final token = _token();
+    if (token == null) {
+      setState(() { _error = 'Not logged in.'; _loading = false; });
+      return;
+    }
+    setState(() { _loading = true; _error = null; });
+    try {
+      final campaigns = await _affiliateService.getCampaigns(token);
+      if (!mounted) return;
+      setState(() { _campaigns = campaigns; _loading = false; });
+    } on AffiliateException catch (e) {
+      if (!mounted) return;
+      setState(() { _error = e.message; _loading = false; });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() { _error = 'Failed to load campaigns.'; _loading = false; });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final active = _kMockCampaigns.where((c) => c.status == _CampaignStatus.active).toList();
-    final upcoming = _kMockCampaigns.where((c) => c.status == _CampaignStatus.upcoming).toList();
-    final ended = _kMockCampaigns.where((c) => c.status == _CampaignStatus.ended).toList();
+    final active = _campaigns.where((c) => c.status == 'active').toList();
+    final upcoming = _campaigns.where((c) => c.status == 'upcoming').toList();
+    final ended = _campaigns.where((c) => c.status == 'ended').toList();
+    final hasAny = active.isNotEmpty || upcoming.isNotEmpty || ended.isNotEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.cloud,
@@ -75,27 +83,88 @@ class AffiliateCampaignsScreen extends StatelessWidget {
         foregroundColor: AppColors.ink,
         title: const Text('Campaigns', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        children: [
-          if (active.isNotEmpty) ...[
-            const _SectionLabel('Active'),
-            const SizedBox(height: AppSpacing.sm),
-            ...active.map((c) => Padding(padding: const EdgeInsets.only(bottom: AppSpacing.md), child: _CampaignCard(campaign: c))),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? _ErrorState(message: _error!, onRetry: _load)
+              : !hasAny
+                  ? const _EmptyCampaigns()
+                  : RefreshIndicator(
+                      onRefresh: _load,
+                      child: ListView(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        children: [
+                          if (active.isNotEmpty) ...[
+                            const _SectionLabel('Active'),
+                            const SizedBox(height: AppSpacing.sm),
+                            ...active.map((c) => Padding(padding: const EdgeInsets.only(bottom: AppSpacing.md), child: _CampaignCard(campaign: c))),
+                          ],
+                          if (upcoming.isNotEmpty) ...[
+                            const SizedBox(height: AppSpacing.sm),
+                            const _SectionLabel('Upcoming'),
+                            const SizedBox(height: AppSpacing.sm),
+                            ...upcoming.map((c) => Padding(padding: const EdgeInsets.only(bottom: AppSpacing.md), child: _CampaignCard(campaign: c))),
+                          ],
+                          if (ended.isNotEmpty) ...[
+                            const SizedBox(height: AppSpacing.sm),
+                            const _SectionLabel('Ended'),
+                            const SizedBox(height: AppSpacing.sm),
+                            ...ended.map((c) => Padding(padding: const EdgeInsets.only(bottom: AppSpacing.md), child: _CampaignCard(campaign: c))),
+                          ],
+                        ],
+                      ),
+                    ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 40, color: AppColors.slate.withOpacity(0.5)),
+            const SizedBox(height: AppSpacing.md),
+            Text(message, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: AppColors.slate)),
+            const SizedBox(height: AppSpacing.md),
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
           ],
-          if (upcoming.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
-            const _SectionLabel('Upcoming'),
-            const SizedBox(height: AppSpacing.sm),
-            ...upcoming.map((c) => Padding(padding: const EdgeInsets.only(bottom: AppSpacing.md), child: _CampaignCard(campaign: c))),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyCampaigns extends StatelessWidget {
+  const _EmptyCampaigns();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.campaign_outlined, size: 40, color: AppColors.slate.withOpacity(0.5)),
+            const SizedBox(height: AppSpacing.md),
+            const Text('No campaigns right now',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: AppColors.ink)),
+            const SizedBox(height: 4),
+            Text('Check back later for promotions you can share.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12.5, color: AppColors.slate.withOpacity(0.9))),
           ],
-          if (ended.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
-            const _SectionLabel('Ended'),
-            const SizedBox(height: AppSpacing.sm),
-            ...ended.map((c) => Padding(padding: const EdgeInsets.only(bottom: AppSpacing.md), child: _CampaignCard(campaign: c))),
-          ],
-        ],
+        ),
       ),
     );
   }
@@ -115,12 +184,12 @@ class _SectionLabel extends StatelessWidget {
 class _CampaignCard extends StatelessWidget {
   const _CampaignCard({required this.campaign});
 
-  final _Campaign campaign;
+  final AffiliateCampaign campaign;
 
   @override
   Widget build(BuildContext context) {
-    final ended = campaign.status == _CampaignStatus.ended;
-    final upcoming = campaign.status == _CampaignStatus.upcoming;
+    final ended = campaign.status == 'ended';
+    final upcoming = campaign.status == 'upcoming';
 
     return Opacity(
       opacity: ended ? 0.55 : 1,
@@ -140,7 +209,7 @@ class _CampaignCard extends StatelessWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(color: _kAccentRed.withOpacity(0.1), borderRadius: BorderRadius.circular(AppRadii.md)),
-                  child: Icon(campaign.icon, color: _kAccentRed, size: 22),
+                  child: Icon(_iconFor(campaign.icon), color: _kAccentRed, size: 22),
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
@@ -179,7 +248,7 @@ class _CampaignCard extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(campaign.description, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500, color: AppColors.slate, height: 1.4)),
-            if (campaign.status == _CampaignStatus.active) ...[
+            if (campaign.status == 'active') ...[
               const SizedBox(height: AppSpacing.md),
               SizedBox(
                 width: double.infinity,

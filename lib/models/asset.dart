@@ -145,6 +145,10 @@ class Asset {
   final AssetStatus status;
   final Map<String, dynamic> attributes;
   final String? imageUrl;
+  // Full ordered photo gallery for this listing — used by the detail
+  // screen's horizontally-scrollable carousel. Listing cards intentionally
+  // keep using [imageUrl] only (first photo), never this list.
+  final List<String> imageUrls;
   final String? postedLabel; // e.g. "New · 1 hour ago"
   final String? brokerId; // links to Broker.id in models/broker.dart
   final double? rating; // e.g. 4.9 — shown as a star badge on the card image
@@ -164,6 +168,7 @@ class Asset {
     this.longitude = 0,
     this.attributes = const {},
     this.imageUrl,
+    this.imageUrls = const [],
     this.postedLabel,
     this.brokerId,
     this.rating,
@@ -187,6 +192,10 @@ class Asset {
       attributes:
           (json['attributes'] as Map?)?.cast<String, dynamic>() ?? const {},
       imageUrl: json['image_url'] as String?,
+      imageUrls: (json['image_urls'] as List?)
+              ?.whereType<String>()
+              .toList() ??
+          const [],
       postedLabel: json['posted_label'] as String?,
       brokerId: json['broker_id'] as String?,
       rating: (json['rating'] as num?)?.toDouble(),
@@ -194,6 +203,13 @@ class Asset {
       roiPercent: (json['roi_percent'] as num?)?.toDouble(),
     );
   }
+
+  /// The gallery to actually render on the detail screen: [imageUrls] when
+  /// the backend provided one, otherwise a single-item list built from
+  /// [imageUrl] so older/unmigrated data still shows its one photo. Never
+  /// empty unless the listing truly has no photo at all.
+  List<String> get galleryUrls =>
+      imageUrls.isNotEmpty ? imageUrls : (imageUrl != null ? [imageUrl!] : const []);
 
   /// Short spec line under the price, tailored per category — mirrors
   /// "4 bd · 3 ba · 2,766 sqft" style summaries from listing marketplaces.

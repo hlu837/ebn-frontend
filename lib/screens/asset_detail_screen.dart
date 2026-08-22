@@ -8,6 +8,7 @@ import '../providers/loop_controller.dart';
 import '../providers/favorites_controller.dart';
 import '../services/agent_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/media_encoding.dart';
 import 'broker_chat_screen.dart';
 import 'broker_profile_screen.dart';
 
@@ -25,8 +26,11 @@ class _EbnOffice {
 /// listing card (Featured listings on the Visitor dashboard, or a category
 /// page). Shows the full listing details plus who to reach about it: the
 /// assigned broker, or EBN's office when Admin posted it directly with
-/// no broker attached. Clicking the "Request Tour" button now shows a
-/// dialog with Call/Text options to contact the property's assigned agent.
+/// no broker attached. Clicking the "Book Your Visit" button shows a
+/// dialog with Call/Text options plus a real "Tour Request" option that
+/// submits via `LoopController.customerRequest` (POST /api/tour-requests)
+/// — this is what makes the request show up under "My Tour Requests"
+/// afterward.
 class AssetDetailScreen extends StatefulWidget {
   const AssetDetailScreen({super.key, required this.asset, required this.user});
 
@@ -210,24 +214,28 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
     if (widget.user.id.isEmpty) {
       // User not logged in - navigate to sign up page
       Navigator.of(context).pushNamed('/signup');
+      return;
+    }
+    // Real POST /api/tour-requests via LoopController — this is what makes
+    // the request actually show up under "My Tour Requests" afterward.
+    // LoopController drives its own searching/dispatched UI elsewhere (see
+    // `loop.stage` above), so this just fires it off and reports any error;
+    // success is reflected by the button switching to "Visit Booked".
+    final loop = context.read<LoopController>();
+    await loop.customerRequest(
+      widget.asset,
+      customerId: widget.user.id,
+      customerName: widget.user.fullName,
+    );
+    if (!mounted) return;
+    if (loop.lastError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not send tour request: ${loop.lastError}')),
+      );
     } else {
-      // User is logged in - send notification to agent
-      try {
-        final brokerId = widget.asset.brokerId;
-        if (brokerId != null) {
-          // Send notification to the agent who posted this property
-          // This will trigger the agent to contact the interested buyer
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Tour request sent to agent!')),
-          );
-          // TODO: Implement backend API call to send notification to agent
-          // await _agentService.sendTourRequestNotification(brokerId, widget.user.id, widget.asset.id);
-        }
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tour request sent to agent!')),
+      );
     }
   }
 
@@ -312,35 +320,9 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
                 ),
             ],
             flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (widget.asset.imageUrl != null)
-                    Image.network(
-                      widget.asset.imageUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stack) => _ImageFallback(
-                          icon: _categoryIcon(widget.asset.category)),
-                      loadingBuilder: (context, child, progress) =>
-                          progress == null
-                              ? child
-                              : _ImageFallback(
-                                  icon: _categoryIcon(widget.asset.category)),
-                    )
-                  else
-                    _ImageFallback(icon: _categoryIcon(widget.asset.category)),
-                  const Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment(0, -0.2),
-                          colors: [Color(0x55000000), Colors.transparent],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              background: _HeroImageCarousel(
+                imageUrls: widget.asset.galleryUrls,
+                categoryIcon: _categoryIcon(widget.asset.category),
               ),
             ),
           ),
@@ -452,6 +434,147 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
               style:
                   const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Hero image area in the detail screen's app bar. Shows a single static
+/// image when the listing only has one photo (unchanged from before), or
+/// a horizontally-swipeable, snapping page carousel with dot indicators
+/// when there's more than one — listing cards elsewhere in the app are
+/// deliberately untouched by this and keep showing only the first photo.
+class _HeroImageCarousel extends StatefulWidget {
+  const _HeroImageCarousel({required this.imageUrls, required this.categoryIcon});
+
+  final List<String> imageUrls;
+  final IconData categoryIcon;
+
+  @override
+  State<_HeroImageCarousel> createState() => _HeroImageCarouselState();
+}
+
+class _HeroImageCarouselState extends State<_HeroImageCarousel> {
+  final PageController _controller = PageController();
+  int _page = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final urls = widget.imageUrls;
+
+    if (urls.isEmpty) {
+      return _ImageFallback(icon: widget.categoryIcon);
+    }
+
+    if (urls.length == 1) {
+      final provider = dataUrlOrNetworkImage(urls.first);
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          if (provider != null)
+            Image(
+              image: provider,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stack) =>
+                  _ImageFallback(icon: widget.categoryIcon),
+            )
+          else
+            _ImageFallback(icon: widget.categoryIcon),
+          const _HeroGradientOverlay(),
+        ],
+      );
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        PageView.builder(
+          controller: _controller,
+          itemCount: urls.length,
+          onPageChanged: (i) => setState(() => _page = i),
+          itemBuilder: (context, index) {
+            final provider = dataUrlOrNetworkImage(urls[index]);
+            return provider != null
+                ? Image(
+                    image: provider,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stack) =>
+                        _ImageFallback(icon: widget.categoryIcon),
+                  )
+                : _ImageFallback(icon: widget.categoryIcon);
+          },
+        ),
+        const _HeroGradientOverlay(),
+        // "2 / 4" counter badge, top-right — clearer at a glance than dots
+        // alone once there are more than ~5 photos.
+        Positioned(
+          top: 12,
+          right: 12,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0x99000000),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '${_page + 1} / ${urls.length}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+        // Dot indicators, bottom-center.
+        Positioned(
+          bottom: 14,
+          left: 0,
+          right: 0,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(urls.length, (i) {
+              final active = i == _page;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: active ? 18 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: active ? Colors.white : const Color(0x99FFFFFF),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              );
+            }),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Shared top-to-center darkening gradient so the back/favorite buttons in
+/// the app bar stay legible over any photo.
+class _HeroGradientOverlay extends StatelessWidget {
+  const _HeroGradientOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Positioned.fill(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment(0, -0.2),
+            colors: [Color(0x55000000), Colors.transparent],
           ),
         ),
       ),

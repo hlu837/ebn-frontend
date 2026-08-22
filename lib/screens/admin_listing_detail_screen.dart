@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/asset.dart';
 import '../services/asset_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/media_encoding.dart';
 import '../widgets/app_buttons.dart';
 
 /// Admin's detail/edit page for a single listing — opened from the
@@ -126,8 +127,8 @@ class _AdminListingDetailScreenState extends State<AdminListingDetailScreen> {
               borderRadius: BorderRadius.circular(AppRadii.lg),
               child: AspectRatio(
                 aspectRatio: 16 / 10,
-                child: asset.imageUrl != null
-                    ? Image.network(asset.imageUrl!, fit: BoxFit.cover)
+                child: dataUrlOrNetworkImage(asset.imageUrl) != null
+                    ? Image(image: dataUrlOrNetworkImage(asset.imageUrl)!, fit: BoxFit.cover)
                     : Container(
                         color: AppColors.border,
                         alignment: Alignment.center,

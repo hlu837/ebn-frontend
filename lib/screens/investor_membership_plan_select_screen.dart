@@ -5,69 +5,15 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/auth_response.dart';
 import '../models/user_role.dart';
 import '../models/role_upgrade_request.dart';
+import '../models/investor_membership_plan.dart';
 import '../services/auth_service.dart';
+import '../services/investor_membership_plan_service.dart';
 import '../services/payment_service.dart';
 import '../services/role_upgrade_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_buttons.dart';
 import 'investor_home_screen.dart';
 import 'verification_pending_screen.dart';
-
-class InvestorMembershipPlan {
-  final int stepNumber;
-  final String title;
-  final double priceEtb;
-  final String description;
-  final List<String> benefits;
-  final String footerNote;
-  final Color primaryColor;
-  final Color headerBgColor;
-  final String tierKey;
-
-  const InvestorMembershipPlan({
-    required this.stepNumber,
-    required this.title,
-    required this.priceEtb,
-    required this.description,
-    required this.benefits,
-    required this.footerNote,
-    required this.primaryColor,
-    required this.headerBgColor,
-    required this.tierKey,
-  });
-
-  String get formattedPrice {
-    final s = priceEtb.toStringAsFixed(0);
-    final buffer = StringBuffer();
-    for (int i = 0; i < s.length; i++) {
-      final posFromEnd = s.length - i;
-      buffer.write(s[i]);
-      if (posFromEnd > 1 && posFromEnd % 3 == 1) buffer.write(',');
-    }
-    return '${buffer.toString()} ETB';
-  }
-}
-
-const kInvestorMembershipPlan = InvestorMembershipPlan(
-  stepNumber: 4,
-  title: 'SHAREHOLDER & INVESTOR\nMEMBERSHIP',
-  priceEtb: 1500000,
-  description: 'Become part of the future vision of AEBNG.',
-  benefits: [
-    'Shareholder Opportunity',
-    'Executive-Level Access',
-    'Partnership Opportunities',
-    'Major Investment Projects',
-    'Priority Business Deals',
-    'Long-Term Growth Benefits',
-    'Leadership Participation',
-    'National & International Expansion Opportunities',
-  ],
-  footerNote: 'Join the exclusive investor circle.',
-  primaryColor: AppColors.ink,
-  headerBgColor: Color(0xFFF3F1ED),
-  tierKey: 'investor_shareholder',
-);
 
 /// Screen displayed after an Investor enters their signup info.
 /// They must complete payment before
@@ -85,24 +31,49 @@ class InvestorMembershipPlanSelectScreen extends StatefulWidget {
 
 class _InvestorMembershipPlanSelectScreenState
     extends State<InvestorMembershipPlanSelectScreen> {
-  InvestorMembershipPlan get _plan => kInvestorMembershipPlan;
+  final InvestorMembershipPlanService _planService =
+      InvestorMembershipPlanService();
+
+  // Painted with the bundled default immediately so this screen is never
+  // empty on first frame, then swapped for the real, admin-configured
+  // plan (price/benefits/copy) the moment it loads from the server.
+  InvestorMembershipPlan _plan = kDefaultInvestorMembershipPlan;
   final bool _isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPlan();
+  }
+
+  Future<void> _loadPlan() async {
+    try {
+      final plan = await _planService.fetchPlan();
+      if (!mounted) return;
+      setState(() => _plan = plan);
+    } on InvestorMembershipPlanException catch (_) {
+      // Backend down / unreachable — keep showing the bundled default.
+    }
+  }
 
   Future<void> _handlePaymentAndActivate() async {
     final result = await _showPaymentModal(_plan);
     if (result == null || !mounted) return;
 
-    if (result is AppUser || result == true) {
-      final updatedUser = result is AppUser
-          ? result
-          : widget.user.copyWith(role: UserRole.investor, accountStatus: 'active');
+    if (result is AppUser) {
+      // `result` only ever reaches here as a server-confirmed AppUser whose
+      // role the backend has actually verified as 'investor' (see
+      // _confirmActivatedRole in the payment sheet) — never fabricated
+      // locally. Faking the role client-side would drop the user into
+      // InvestorHomeScreen while the backend still rejects investor-only
+      // API calls, since it always checks the current DB role.
       await _showActivationSuccessDialog(_plan);
       if (!mounted) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
-              builder: (_) => InvestorHomeScreen(user: updatedUser)),
+              builder: (_) => InvestorHomeScreen(user: result)),
           (route) => false,
         );
       });
@@ -507,6 +478,12 @@ class _InvestorPaymentSheetState extends State<_InvestorPaymentSheet> {
   // ── Chapa state ──────────────────────────────────────────────────────
   bool _chapaLoading = false;
   bool _chapaPolling = false;
+  bool _chapaConfirming = false;
+  // Set once Chapa confirms the payment itself succeeded. Once true we never
+  // show the "Pay again" button for a role-activation failure — the money
+  // has already moved, so the correct action is to re-check status, not to
+  // charge the card a second time.
+  bool _paymentSucceededPendingRole = false;
   String? _chapaTxRef;
   String? _chapaError;
   Timer? _pollTimer;
@@ -589,14 +566,7 @@ class _InvestorPaymentSheetState extends State<_InvestorPaymentSheet> {
       if (!mounted) return;
       if (status == PaymentStatus.success) {
         _pollTimer?.cancel();
-        try {
-          final updatedUser = await AuthService().me(widget.user.token ?? '');
-          if (!mounted) return;
-          Navigator.of(context).pop(updatedUser);
-        } catch (_) {
-          if (!mounted) return;
-          Navigator.of(context).pop(true);
-        }
+        await _confirmActivatedRole();
       } else if (status == PaymentStatus.failed) {
         _pollTimer?.cancel();
         setState(() {
@@ -608,6 +578,66 @@ class _InvestorPaymentSheetState extends State<_InvestorPaymentSheet> {
     } on PaymentException {
       // Transient error — next tick retries
     }
+  }
+
+  /// Payment succeeded on Chapa's side, but the account is only truly ready
+  /// once the backend has actually flipped this user's `role` column to
+  /// 'investor' — the payment webhook and this poll can race, so a single
+  /// `me()` call can still return the pre-upgrade role. Retries with
+  /// backoff until the server confirms role == investor, rather than ever
+  /// faking that upgrade on the client: entering InvestorHomeScreen with a
+  /// role the backend doesn't recognize just defers the failure to the
+  /// first investor-only API call.
+  Future<void> _confirmActivatedRole() async {
+    setState(() {
+      _chapaPolling = false;
+      _chapaConfirming = true;
+      _paymentSucceededPendingRole = true;
+      _chapaError = null;
+    });
+
+    const maxAttempts = 6;
+    const delays = [
+      Duration(seconds: 1),
+      Duration(seconds: 2),
+      Duration(seconds: 3),
+      Duration(seconds: 4),
+      Duration(seconds: 5),
+      Duration(seconds: 6),
+    ];
+
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      if (!mounted) return;
+      try {
+        final updatedUser = await AuthService().me(widget.user.token ?? '');
+        if (updatedUser.role == UserRole.investor) {
+          if (!mounted) return;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            Navigator.of(context).pop(updatedUser);
+          });
+          return;
+        }
+        // Payment confirmed but the role upgrade hasn't landed yet server-side — retry.
+      } catch (_) {
+        // Transient network/auth error while confirming — retry below.
+      }
+      if (attempt < maxAttempts - 1) {
+        await Future.delayed(delays[attempt]);
+      }
+    }
+
+    // Payment succeeded but we still can't confirm the role upgrade after
+    // retrying. Don't guess — surface this so the user can retry rather
+    // than land on a broken, half-activated dashboard.
+    if (!mounted) return;
+    setState(() {
+      _chapaConfirming = false;
+      _chapaError =
+          'Payment received, but we couldn\'t confirm your investor account activation yet. '
+          'Please reopen the app in a moment — this usually finishes within a minute. '
+          'Contact support if it persists.';
+    });
   }
 
   // ── Bank-transfer flow ────────────────────────────────────────────────
@@ -840,6 +870,44 @@ class _InvestorPaymentSheetState extends State<_InvestorPaymentSheet> {
       );
     }
 
+    if (_chapaConfirming) {
+      return Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8FBF1),
+              borderRadius: BorderRadius.circular(AppRadii.md),
+              border:
+                  Border.all(color: const Color(0xFF1DBF73).withOpacity(0.4)),
+            ),
+            child: Column(
+              children: [
+                const CircularProgressIndicator(color: Color(0xFF1DBF73)),
+                const SizedBox(height: AppSpacing.md),
+                const Text(
+                  'Payment received — activating your investor account…',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: AppColors.ink),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'This usually takes a few seconds. Please don\'t close this screen.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 12, color: AppColors.slate, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -936,30 +1004,57 @@ class _InvestorPaymentSheetState extends State<_InvestorPaymentSheet> {
         SizedBox(
           width: double.infinity,
           height: 50,
-          child: ElevatedButton.icon(
-            onPressed: _chapaLoading ? null : _launchChapa,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1DBF73),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadii.button)),
-              elevation: 0,
-            ),
-            icon: _chapaLoading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2))
-                : const Icon(Icons.bolt_rounded, size: 20),
-            label: Text(
-              _chapaLoading
-                  ? 'Preparing checkout…'
-                  : 'Pay ${widget.plan.formattedPrice} with Chapa',
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-            ),
-          ),
+          child: _paymentSucceededPendingRole
+              ? ElevatedButton.icon(
+                  onPressed: _chapaConfirming ? null : _confirmActivatedRole,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1DBF73),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.button)),
+                    elevation: 0,
+                  ),
+                  icon: const Icon(Icons.refresh_rounded, size: 20),
+                  label: const Text(
+                    'Check activation status',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 14),
+                  ),
+                )
+              : ElevatedButton.icon(
+                  onPressed: _chapaLoading ? null : _launchChapa,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1DBF73),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.button)),
+                    elevation: 0,
+                  ),
+                  icon: _chapaLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.bolt_rounded, size: 20),
+                  label: Text(
+                    _chapaLoading
+                        ? 'Preparing checkout…'
+                        : 'Pay ${widget.plan.formattedPrice} with Chapa',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 14),
+                  ),
+                ),
         ),
+        if (_paymentSucceededPendingRole) ...[
+          const SizedBox(height: 8),
+          const Text(
+            'Your payment already went through — this just re-checks whether '
+            'your investor account has finished activating. You won\'t be charged again.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 11.5, color: AppColors.slate, height: 1.4),
+          ),
+        ],
       ],
     );
   }

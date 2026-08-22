@@ -4,6 +4,7 @@ import '../models/asset.dart';
 import '../models/auth_response.dart';
 import '../models/order_request.dart';
 import '../theme/app_theme.dart';
+import '../utils/media_encoding.dart';
 import '../widgets/agent_drawer.dart' show AgentTier, AgentTierX;
 import '../widgets/listing_intent_sheet.dart';
 import 'agent_broker_network_screen.dart';
@@ -528,8 +529,9 @@ class _PropertyCard extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(AppRadii.sm),
-                  child: asset.imageUrl != null
-                      ? Image.network(asset.imageUrl!,
+                  child: dataUrlOrNetworkImage(asset.imageUrl) != null
+                      ? Image(
+                          image: dataUrlOrNetworkImage(asset.imageUrl)!,
                           width: 68, height: 68, fit: BoxFit.cover)
                       : Container(
                           width: 68,

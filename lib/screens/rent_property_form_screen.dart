@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/auth_response.dart';
 import '../models/rental_property_details.dart';
@@ -10,6 +8,7 @@ import '../models/vehicle_rental_details.dart';
 import '../models/sell_request.dart' show ReportMediaItem;
 import '../services/payment_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/media_encoding.dart';
 import '../utils/validators.dart';
 import '../widgets/app_buttons.dart';
 
@@ -223,20 +222,19 @@ class _RentPropertyFormScreenState extends State<RentPropertyFormScreen> {
   }
 
   void _addVehicleMedia() async {
-    final picker = ImagePicker();
     try {
-      final pickedFile = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxHeight: 1200,
-        maxWidth: 1200,
-        imageQuality: 80,
-      );
-      if (pickedFile != null) {
+      final encoded = await pickAndEncodeImage();
+      if (encoded != null) {
         setState(() => _vehicleMedia.add(ReportMediaItem(
           id: 'vm${_vehicleMediaMockId++}',
-          filePath: pickedFile.path,
+          filePath: encoded,
         )));
       }
+    } on FormatException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1349,10 +1347,15 @@ class _MediaThumb extends StatelessWidget {
           height: 76,
           decoration: BoxDecoration(color: AppColors.ink, borderRadius: BorderRadius.circular(AppRadii.md)),
           alignment: Alignment.center,
-          child: item.filePath != null
-              ? Image.file(
-                  File(item.filePath!),
-                  fit: BoxFit.cover,
+          child: dataUrlOrNetworkImage(item.filePath) != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadii.md),
+                  child: Image(
+                    image: dataUrlOrNetworkImage(item.filePath)!,
+                    width: 76,
+                    height: 76,
+                    fit: BoxFit.cover,
+                  ),
                 )
               : const Icon(Icons.image_rounded, color: AppColors.primaryYellow, size: 26),
         ),

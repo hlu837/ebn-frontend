@@ -14,6 +14,7 @@ class AdminDrawerActions {
   final VoidCallback? onSupportInbox;
   final VoidCallback? onActivityLog;
   final VoidCallback? onAnnouncements;
+  final VoidCallback? onCompanyAds;
   final VoidCallback? onInvestmentOpportunities;
   final VoidCallback? onInvestmentCommitments;
   final VoidCallback? onConfirmedInvestments;
@@ -32,6 +33,7 @@ class AdminDrawerActions {
     this.onSupportInbox,
     this.onActivityLog,
     this.onAnnouncements,
+    this.onCompanyAds,
     this.onInvestmentOpportunities,
     this.onInvestmentCommitments,
     this.onConfirmedInvestments,
@@ -119,6 +121,11 @@ class AdminDrawer extends StatelessWidget {
                     icon: Icons.campaign_outlined,
                     label: 'News & Announcements',
                     onTap: () => _tap(context, actions.onAnnouncements),
+                  ),
+                  _DrawerItem(
+                    icon: Icons.ad_units_outlined,
+                    label: 'Company Ads',
+                    onTap: () => _tap(context, actions.onCompanyAds),
                   ),
                   _DrawerItem(
                     icon: Icons.trending_up_rounded,

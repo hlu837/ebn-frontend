@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/asset.dart';
@@ -15,6 +13,7 @@ import '../providers/sell_request_controller.dart';
 import '../providers/pending_form_store.dart';
 import '../services/payment_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/media_encoding.dart';
 import '../utils/validators.dart';
 import '../widgets/app_buttons.dart';
 import 'my_sell_requests_screen.dart';
@@ -201,10 +200,9 @@ class _SellPropertyFormScreenState extends State<SellPropertyFormScreen> {
   final Set<MachineryFinancingOption> _machineryFinancingOptions = {};
   final _machineryPreApprovedPctController = TextEditingController();
 
-  // Machinery wizard: 5. Media Upload & Verification
+  // Machinery wizard: 5. Photo Upload & Verification
   final List<ReportMediaItem> _machineryMedia = [];
   int _machineryMediaMockId = 1;
-  final _machineryVideoLinkController = TextEditingController();
 
   // Agent self-listing only: "Photos & Report" step — same shape as the
   // report an Agent would otherwise only add later via
@@ -305,7 +303,6 @@ class _SellPropertyFormScreenState extends State<SellPropertyFormScreen> {
         'machineryFinancingOptions':
             _machineryFinancingOptions.map((e) => e.index).toList(),
         'machineryPreApprovedPct': _machineryPreApprovedPctController.text,
-        'machineryVideoLink': _machineryVideoLinkController.text,
       },
     );
   }
@@ -414,8 +411,6 @@ class _SellPropertyFormScreenState extends State<SellPropertyFormScreen> {
       }
       _machineryPreApprovedPctController.text =
           d['machineryPreApprovedPct'] as String? ?? '';
-      _machineryVideoLinkController.text =
-          d['machineryVideoLink'] as String? ?? '';
     });
 
     submit();
@@ -467,7 +462,6 @@ class _SellPropertyFormScreenState extends State<SellPropertyFormScreen> {
     _machineryCapacityController.dispose();
     _machineryPriceController.dispose();
     _machineryPreApprovedPctController.dispose();
-    _machineryVideoLinkController.dispose();
     _agentNotesController.dispose();
     super.dispose();
   }
@@ -500,14 +494,14 @@ class _SellPropertyFormScreenState extends State<SellPropertyFormScreen> {
                     'Operational Status',
                     'Capacity & Specs',
                     'Pricing & Financing',
-                    'Media & Verification',
+                    'Photo & Verification',
                     'Review & submit'
                   ]
                 : ['Category', 'Property details', 'Review & submit'];
     if (widget.isAgentListing) {
       titles.insert(titles.length - 1, 'Photos & Report');
     } else if (!_isMachinery) {
-      // Machinery already has its own dedicated "Media & Verification"
+      // Machinery already has its own dedicated "Photo & Verification"
       // step; every other Visitor flow (Residential/Vehicle/other) needs
       // one added since none of them collect photos otherwise.
       titles.insert(titles.length - 1, 'Photos');
@@ -802,9 +796,7 @@ class _SellPropertyFormScreenState extends State<SellPropertyFormScreen> {
               double.tryParse(_machineryPriceController.text.trim()) ?? 0,
           financingOptions: _machineryFinancingOptions,
           preApprovedPercentage: _machineryPreApprovedPctController.text.trim(),
-          photoCount: _machineryMedia.where((m) => !m.isVideo).length,
-          videoCount: _machineryMedia.where((m) => m.isVideo).length,
-          videoLink: _machineryVideoLinkController.text.trim(),
+          photoCount: _machineryMedia.length,
         );
         final displayName = _machineryCategory == MachineryCategory.other &&
                 _machineryOtherController.text.trim().isNotEmpty
@@ -1110,7 +1102,7 @@ class _SellPropertyFormScreenState extends State<SellPropertyFormScreen> {
                 SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
-                    'Construction machinery goes through a dedicated form covering type, operational status, capacity, pricing/financing, and photo/video verification.',
+                    'Construction machinery goes through a dedicated form covering type, operational status, capacity, pricing/financing, and photo verification.',
                     style: TextStyle(
                         fontSize: 12.5, color: AppColors.ink, height: 1.4),
                   ),
@@ -1612,20 +1604,19 @@ class _SellPropertyFormScreenState extends State<SellPropertyFormScreen> {
   }
 
   void _addMachineryMedia() async {
-    final picker = ImagePicker();
     try {
-      final pickedFile = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxHeight: 1200,
-        maxWidth: 1200,
-        imageQuality: 80,
-      );
-      if (pickedFile != null) {
+      final encoded = await pickAndEncodeImage();
+      if (encoded != null) {
         setState(() => _machineryMedia.add(ReportMediaItem(
               id: 'mm${_machineryMediaMockId++}',
-              filePath: pickedFile.path,
+              filePath: encoded,
             )));
       }
+    } on FormatException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1643,7 +1634,7 @@ class _SellPropertyFormScreenState extends State<SellPropertyFormScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _StepHeader(
-          title: '5. Media Upload & Verification',
+          title: '5. Photo Upload & Verification',
           subtitle:
               'Front, sides, engine compartment, tracks/tyres, and control panel (dashboard/cabin).',
         ),
@@ -1665,20 +1656,19 @@ class _SellPropertyFormScreenState extends State<SellPropertyFormScreen> {
   }
 
   void _addAgentMedia() async {
-    final picker = ImagePicker();
     try {
-      final pickedFile = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxHeight: 1200,
-        maxWidth: 1200,
-        imageQuality: 80,
-      );
-      if (pickedFile != null) {
+      final encoded = await pickAndEncodeImage();
+      if (encoded != null) {
         setState(() => _agentMedia.add(ReportMediaItem(
               id: 'am${_agentMediaMockId++}',
-              filePath: pickedFile.path,
+              filePath: encoded,
             )));
       }
+    } on FormatException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1739,20 +1729,19 @@ class _SellPropertyFormScreenState extends State<SellPropertyFormScreen> {
   }
 
   void _addVisitorMedia() async {
-    final picker = ImagePicker();
     try {
-      final pickedFile = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxHeight: 1200,
-        maxWidth: 1200,
-        imageQuality: 80,
-      );
-      if (pickedFile != null) {
+      final encoded = await pickAndEncodeImage();
+      if (encoded != null) {
         setState(() => _visitorMedia.add(ReportMediaItem(
               id: 'vm${_visitorMediaMockId++}',
-              filePath: pickedFile.path,
+              filePath: encoded,
             )));
       }
+    } on FormatException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2245,9 +2234,7 @@ class _SellPropertyFormScreenState extends State<SellPropertyFormScreen> {
                 financingOptions: _machineryFinancingOptions,
                 preApprovedPercentage:
                     _machineryPreApprovedPctController.text.trim(),
-                photoCount: _machineryMedia.where((m) => !m.isVideo).length,
-                videoCount: _machineryMedia.where((m) => m.isVideo).length,
-                videoLink: _machineryVideoLinkController.text.trim(),
+                photoCount: _machineryMedia.length,
               ).toDescriptionText(),
               style: const TextStyle(
                   fontSize: 12.5, color: AppColors.slate, height: 1.5),
@@ -2555,10 +2542,15 @@ class _MachineryMediaThumb extends StatelessWidget {
               color: AppColors.ink,
               borderRadius: BorderRadius.circular(AppRadii.md)),
           alignment: Alignment.center,
-          child: item.filePath != null
-              ? Image.file(
-                  File(item.filePath!),
-                  fit: BoxFit.cover,
+          child: dataUrlOrNetworkImage(item.filePath) != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadii.md),
+                  child: Image(
+                    image: dataUrlOrNetworkImage(item.filePath)!,
+                    width: 76,
+                    height: 76,
+                    fit: BoxFit.cover,
+                  ),
                 )
               : const Icon(Icons.image_rounded,
                   color: AppColors.primaryYellow, size: 26),

@@ -17,6 +17,7 @@ import '../widgets/asset_list_card.dart';
 import '../widgets/notification_alert_overlay.dart';
 import 'admin_activity_log_screen.dart';
 import 'admin_announcements_screen.dart';
+import 'admin_company_ads_screen.dart';
 import 'admin_agents_screen.dart';
 import 'admin_investment_opportunities_screen.dart';
 import 'admin_investment_commitments_screen.dart';
@@ -235,6 +236,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           onAnnouncements: () => Navigator.of(context).push(MaterialPageRoute(
             builder: (_) =>
                 AdminAnnouncementsScreen(token: widget.user.token ?? ''),
+          )),
+          onCompanyAds: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => AdminCompanyAdsScreen(token: widget.user.token ?? ''),
           )),
           onInvestmentOpportunities: () =>
               Navigator.of(context).push(MaterialPageRoute(

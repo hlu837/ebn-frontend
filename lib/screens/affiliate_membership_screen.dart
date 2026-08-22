@@ -305,6 +305,7 @@ class _TierPickerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final upgradeTargets = AffiliateTier.values.where((t) => t.index > currentTier.index).toList();
     return Padding(
       padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xl),
       child: Column(
@@ -314,7 +315,7 @@ class _TierPickerSheet extends StatelessWidget {
           Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: AppSpacing.md), decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
           const Text('Choose a plan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink)),
           const SizedBox(height: AppSpacing.md),
-          for (final tier in AffiliateTier.values) ...[
+          for (final tier in upgradeTargets) ...[
             _TierOptionRow(
                 tier: tier,
                 selected: tier == currentTier,
@@ -322,17 +323,6 @@ class _TierPickerSheet extends StatelessWidget {
                 onTap: () => onSelect(tier)),
             const SizedBox(height: AppSpacing.sm),
           ],
-          const SizedBox(height: AppSpacing.md),
-          if (currentTier != AffiliateTier.bronze)
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.slate,
-                side: const BorderSide(color: AppColors.border),
-              ),
-              icon: const Icon(Icons.remove_circle_outline, size: 18),
-              label: const Text('Downgrade to Free'),
-              onPressed: () => onSelect(AffiliateTier.bronze),
-            ),
         ],
       ),
     );
@@ -356,7 +346,6 @@ class _TierOptionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fee = _kTierMonthlyFeeEtb[tier] ?? 0;
-    final isDowngrade = currentTier != null && tier.index < currentTier!.index;
     final isUpgrade = currentTier != null && tier.index > currentTier!.index;
     return Material(
       color: Colors.transparent,
@@ -381,20 +370,7 @@ class _TierOptionRow extends StatelessWidget {
                     Row(
                       children: [
                         Text(tier.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink)),
-                        if (!selected && isDowngrade)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.slate.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text('Downgrade',
-                                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.slate)),
-                            ),
-                          )
-                        else if (!selected && isUpgrade)
+                        if (!selected && isUpgrade)
                           Padding(
                             padding: const EdgeInsets.only(left: 8),
                             child: Container(

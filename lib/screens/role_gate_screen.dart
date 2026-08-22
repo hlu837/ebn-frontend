@@ -18,7 +18,6 @@ import '../models/asset.dart';
 import '../models/auth_response.dart';
 import '../models/user_role.dart';
 import '../services/asset_service.dart';
-import '../services/mock_asset_data.dart';
 import '../theme/landing_colors.dart';
 import '../widgets/asset_list_card.dart';
 import '../widgets/landing_shared.dart';
@@ -87,8 +86,8 @@ void _scrollToProperties({AssetCategorySlug? category, String? query}) {
 /// [_PropertiesSectionState] alone) so the top-nav search index, which is
 /// built synchronously on tap outside of any fetch, can use the same real
 /// data instead of only ever knowing about the bundled mock list. Falls
-/// back to [kMockCompanyAssets] until the first successful fetch lands.
-List<Asset> _cachedLandingAssets = List.of(kMockCompanyAssets);
+/// Empty until the first successful `GET /api/assets` fetch lands.
+List<Asset> _cachedLandingAssets = [];
 
 // -----------------------------------------------------------------------------
 // Landing-page search -- now spans marketing pages *and* the live listings.
@@ -893,7 +892,10 @@ class _PropertiesSectionState extends State<_PropertiesSection> {
       if (!mounted) return;
       setState(() => _cachedLandingAssets = assets);
     } on AssetException catch (_) {
-      // Backend down / unreachable — keep showing the bundled mock listings.
+      // Backend down / unreachable — there's no bundled mock fallback, so
+      // this just leaves `_cachedLandingAssets` as whatever it already was
+      // (empty on first load, which renders the "No listings match your
+      // search yet." empty state below).
     }
   }
 
@@ -1057,7 +1059,6 @@ class _CategoryTile extends StatelessWidget {
   const _CategoryTile({
     required this.label,
     required this.icon,
-    this.imageUrl,
     required this.selected,
     required this.onTap,
   });

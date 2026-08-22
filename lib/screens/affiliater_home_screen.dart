@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import '../models/asset.dart';
 import '../models/auth_response.dart';
 import '../services/affiliate_service.dart';
+import '../services/asset_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/media_encoding.dart';
 import '../widgets/app_buttons.dart';
 import 'affiliate_referrals_screen.dart';
 import 'affiliate_earnings_screen.dart';
@@ -49,46 +51,33 @@ class _AffiliaterHomeScreenState extends State<AffiliaterHomeScreen> {
   int _trackerTabIndex = 0; // 0 = All, 1 = Pending, 2 = Completed
   final TextEditingController _searchController = TextEditingController();
   final AffiliateService _affiliateService = AffiliateService();
+  final AssetService _assetService = AssetService();
 
   String _affiliateCode = 'Loading...';
   List<_ReferralEntry> _referralsList = [];
   // ignore: unused_field
   bool _isLoadingData = false;
-  int _unreadNotifications = 0;
+  List<Asset> _topProperties = [];
 
-  final List<Asset> _topProperties = const [
-    Asset(
-      id: 'aff-1',
-      title: 'Skyline Luxury Villa',
-      priceAmount: 24500000,
-      priceCurrency: 'ETB',
-      category: AssetCategorySlug.house,
-      status: AssetStatus.active,
-      addressLine: 'Bole, Addis Ababa',
-      city: 'Addis Ababa',
-      attributes: {'bedrooms': 5, 'bathrooms': 4, 'sqft': 4200},
-      imageUrl:
-          'https://images.unsplash.com/photo-1613977257363-707ba9348227?w=800&q=80',
-    ),
-    Asset(
-      id: 'aff-2',
-      title: 'Downtown Heights Apt',
-      priceAmount: 6250000,
-      priceCurrency: 'ETB',
-      category: AssetCategorySlug.apartments,
-      status: AssetStatus.active,
-      addressLine: 'Kazanchis, Addis Ababa',
-      city: 'Addis Ababa',
-      attributes: {'bedrooms': 3, 'bathrooms': 2, 'sqft': 1650},
-      imageUrl:
-          'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&q=80',
-    ),
-  ];
+  int _unreadNotifications = 0;
 
   @override
   void initState() {
     super.initState();
     _loadAffiliateData();
+    _loadTopProperties();
+  }
+
+  Future<void> _loadTopProperties() async {
+    try {
+      final assets = await _assetService.fetchAssets(limit: 10);
+      if (!mounted) return;
+      setState(() {
+        _topProperties = assets.where((a) => a.status == AssetStatus.active).take(10).toList();
+      });
+    } on AssetException catch (_) {
+      // Leave the list empty — the rail below already handles that case.
+    }
   }
 
   Future<void> _loadAffiliateData() async {
@@ -135,22 +124,7 @@ class _AffiliaterHomeScreenState extends State<AffiliaterHomeScreen> {
     super.dispose();
   }
 
-  List<_ReferralEntry> get _referrals => _referralsList.isNotEmpty
-      ? _referralsList
-      : const [
-          _ReferralEntry(
-            customerName: 'Sarah M.',
-            propertyTitle: 'Skyline Luxury Villa',
-            commissionAmount: 490000,
-            isPending: true,
-          ),
-          _ReferralEntry(
-            customerName: 'David K.',
-            propertyTitle: 'Downtown Heights Apt',
-            commissionAmount: 164000,
-            isPending: false,
-          ),
-        ];
+  List<_ReferralEntry> get _referrals => _referralsList;
 
   List<_ReferralEntry> get _filteredReferrals {
     final list = _referrals;
@@ -333,7 +307,8 @@ class _AffiliaterHomeScreenState extends State<AffiliaterHomeScreen> {
                                 AffiliatePropertiesScreen(user: widget.user))),
                     onCampaigns: () => Navigator.of(context).push(
                         MaterialPageRoute(
-                            builder: (_) => const AffiliateCampaignsScreen())),
+                            builder: (_) =>
+                                AffiliateCampaignsScreen(user: widget.user))),
                     onReferrals: () => Navigator.of(context).push(
                         MaterialPageRoute(
                             builder: (_) => AffiliateReferralsScreen(
@@ -375,13 +350,10 @@ class _AffiliaterHomeScreenState extends State<AffiliaterHomeScreen> {
                           const SizedBox(width: AppSpacing.md),
                       itemBuilder: (context, i) => _AffiliatePropertyCard(
                         asset: _topProperties[i],
-                        commissionPercent: i.isEven ? 2.0 : 2.5,
                         onGenerateLink: () => _generateLink(_topProperties[i]),
                       ),
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.xl),
-                  const _PromoBanner(),
                   const SizedBox(height: AppSpacing.xl),
                   Text('Referral Tracker',
                       style: Theme.of(context).textTheme.titleMedium),
@@ -711,11 +683,9 @@ class _SearchField extends StatelessWidget {
 class _AffiliatePropertyCard extends StatelessWidget {
   const _AffiliatePropertyCard(
       {required this.asset,
-      required this.commissionPercent,
       required this.onGenerateLink});
 
   final Asset asset;
-  final double commissionPercent;
   final VoidCallback onGenerateLink;
 
   @override
@@ -736,28 +706,10 @@ class _AffiliatePropertyCard extends StatelessWidget {
               children: [
                 AspectRatio(
                   aspectRatio: 16 / 11,
-                  child: asset.imageUrl != null
-                      ? Image.network(asset.imageUrl!,
+                  child: dataUrlOrNetworkImage(asset.imageUrl) != null
+                      ? Image(image: dataUrlOrNetworkImage(asset.imageUrl)!,
                           fit: BoxFit.cover, width: double.infinity)
                       : Container(color: AppColors.border),
-                ),
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                        color: AppColors.success,
-                        borderRadius: BorderRadius.circular(AppRadii.pill)),
-                    child: Text(
-                      'Earn ${commissionPercent.toStringAsFixed(0)}% Commission',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w800),
-                    ),
-                  ),
                 ),
               ],
             ),
@@ -801,65 +753,6 @@ class _AffiliatePropertyCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _PromoBanner extends StatelessWidget {
-  const _PromoBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFDEBEF),
-        borderRadius: BorderRadius.circular(AppRadii.lg),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                      color: _kAccentRed,
-                      borderRadius: BorderRadius.circular(AppRadii.pill)),
-                  child: const Text('Limited Offer',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w800)),
-                ),
-                const SizedBox(height: 6),
-                const Text('Summer Real Estate Drive',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.ink)),
-                const SizedBox(height: 2),
-                const Text('Earn Double Commission (4%)',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.slate)),
-              ],
-            ),
-          ),
-          Container(
-            width: 40,
-            height: 40,
-            decoration:
-                const BoxDecoration(color: _kAccentRed, shape: BoxShape.circle),
-            child: const Icon(Icons.arrow_forward_rounded,
-                color: Colors.white, size: 20),
-          ),
-        ],
       ),
     );
   }

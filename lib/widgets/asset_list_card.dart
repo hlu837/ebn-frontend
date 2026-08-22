@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/asset.dart';
 import '../theme/app_theme.dart';
+import '../utils/media_encoding.dart';
 
 /// A single listing card for the company property/asset feed.
 /// Layout mirrors familiar real-estate marketplace cards (image up top with
@@ -250,16 +251,12 @@ class AssetListCard extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    if (asset.imageUrl != null)
-                      Image.network(
-                        asset.imageUrl!,
+                    if (dataUrlOrNetworkImage(asset.imageUrl) != null)
+                      Image(
+                        image: dataUrlOrNetworkImage(asset.imageUrl)!,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stack) =>
                             _ImageFallback(category: asset.category),
-                        loadingBuilder: (context, child, progress) =>
-                            progress == null
-                                ? child
-                                : _ImageFallback(category: asset.category),
                       )
                     else
                       _ImageFallback(category: asset.category),
@@ -380,15 +377,12 @@ class _ImageHeader extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (asset.imageUrl != null)
-            Image.network(
-              asset.imageUrl!,
+          if (dataUrlOrNetworkImage(asset.imageUrl) != null)
+            Image(
+              image: dataUrlOrNetworkImage(asset.imageUrl)!,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stack) =>
                   _ImageFallback(category: asset.category),
-              loadingBuilder: (context, child, progress) => progress == null
-                  ? child
-                  : _ImageFallback(category: asset.category),
             )
           else
             _ImageFallback(category: asset.category),
