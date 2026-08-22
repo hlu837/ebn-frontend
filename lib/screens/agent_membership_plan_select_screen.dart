@@ -149,24 +149,30 @@ class _AgentMembershipPlanSelectScreenState
           : widget.user.copyWith(role: UserRole.agent, accountStatus: 'active');
       await _showActivationSuccessDialog(_selectedPlan);
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => AgentHomeScreen(user: updatedUser)),
-        (route) => false,
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => AgentHomeScreen(user: updatedUser)),
+          (route) => false,
+        );
+      });
       return;
     }
 
     if (result is RoleUpgradeRequest) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => VerificationPendingScreen(
-            user: widget.user,
-            targetRole: UserRole.agent,
-            pendingRequest: result,
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => VerificationPendingScreen(
+              user: widget.user,
+              targetRole: UserRole.agent,
+              pendingRequest: result,
+            ),
           ),
-        ),
-        (route) => false,
-      );
+          (route) => false,
+        );
+      });
     }
   }
 

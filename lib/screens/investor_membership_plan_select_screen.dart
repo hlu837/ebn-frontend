@@ -98,25 +98,31 @@ class _InvestorMembershipPlanSelectScreenState
           : widget.user.copyWith(role: UserRole.investor, accountStatus: 'active');
       await _showActivationSuccessDialog(_plan);
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-            builder: (_) => InvestorHomeScreen(user: updatedUser)),
-        (route) => false,
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+              builder: (_) => InvestorHomeScreen(user: updatedUser)),
+          (route) => false,
+        );
+      });
       return;
     }
 
     if (result is RoleUpgradeRequest) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => VerificationPendingScreen(
-            user: widget.user,
-            targetRole: UserRole.investor,
-            pendingRequest: result,
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => VerificationPendingScreen(
+              user: widget.user,
+              targetRole: UserRole.investor,
+              pendingRequest: result,
+            ),
           ),
-        ),
-        (route) => false,
-      );
+          (route) => false,
+        );
+      });
     }
   }
 
