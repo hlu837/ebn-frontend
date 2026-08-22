@@ -438,6 +438,32 @@ class _TierPickerSheet extends StatelessWidget {
                   onTap: () => onSelect(tier)),
               const SizedBox(height: AppSpacing.sm),
             ],
+          ] else ...[
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                child: Column(
+                  children: [
+                    Icon(currentTier.icon, size: 44, color: currentTier.color),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      'You are on the highest plan (${currentTier.label})',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.ink),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'You already enjoy all premium features and top priority benefits.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: AppColors.slate),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
           const SizedBox(height: AppSpacing.md),
         ],

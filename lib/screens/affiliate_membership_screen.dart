@@ -315,13 +315,41 @@ class _TierPickerSheet extends StatelessWidget {
           Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: AppSpacing.md), decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
           const Text('Choose a plan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink)),
           const SizedBox(height: AppSpacing.md),
-          for (final tier in upgradeTargets) ...[
-            _TierOptionRow(
-                tier: tier,
-                selected: tier == currentTier,
-                currentTier: currentTier,
-                onTap: () => onSelect(tier)),
-            const SizedBox(height: AppSpacing.sm),
+          if (upgradeTargets.isNotEmpty) ...[
+            for (final tier in upgradeTargets) ...[
+              _TierOptionRow(
+                  tier: tier,
+                  selected: tier == currentTier,
+                  currentTier: currentTier,
+                  onTap: () => onSelect(tier)),
+              const SizedBox(height: AppSpacing.sm),
+            ],
+          ] else ...[
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                child: Column(
+                  children: [
+                    Icon(currentTier.icon, size: 44, color: currentTier.color),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      'You are on the highest plan (${currentTier.label})',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.ink),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'You already enjoy all premium features and top priority benefits.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: AppColors.slate),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ],
       ),
