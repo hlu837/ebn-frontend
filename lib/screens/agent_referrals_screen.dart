@@ -76,7 +76,7 @@ class _Referral {
     }
 
     final catSlugStr = json['categorySlug'] as String? ?? 'apartments';
-    final category = AssetCategorySlug.fromSlug(catSlugStr);
+    final category = AssetCategorySlugX.fromSlug(catSlugStr);
 
     return _Referral(
       id: json['id'] as String? ?? '',
