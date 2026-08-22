@@ -690,10 +690,16 @@ class _AgentPaymentSheetState extends State<_AgentPaymentSheet> {
         try {
           final updatedUser = await AuthService().me(widget.user.token ?? '');
           if (!mounted) return;
-          Navigator.of(context).pop(updatedUser);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            Navigator.of(context).pop(updatedUser);
+          });
         } catch (_) {
           if (!mounted) return;
-          Navigator.of(context).pop(true);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            Navigator.of(context).pop(true);
+          });
         }
       } else if (status == PaymentStatus.failed) {
         _pollTimer?.cancel();
@@ -748,7 +754,10 @@ class _AgentPaymentSheetState extends State<_AgentPaymentSheet> {
         token: widget.user.token ?? '',
       );
       if (!mounted) return;
-      Navigator.of(context).pop(req);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).pop(req);
+      });
     } catch (e) {
       if (mounted) {
         setState(() => _bankSubmitting = false);
