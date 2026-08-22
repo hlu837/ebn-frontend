@@ -30,6 +30,7 @@ const { router: investorWalletRouter } = require('./routes/investorWallet');
 const { router: usersRouter } = require('./routes/users');
 const { router: transactionsRouter } = require('./routes/transactions');
 const { router: adminSettingsRouter } = require('./routes/adminSettings');
+const { router: referralsRouter } = require('./routes/referrals');
 const investmentPayoutScheduler = require('./models/investmentPayoutScheduler');
 
 const PORT = Number(process.env.PORT || 4000);
@@ -77,6 +78,7 @@ app.use('/api/investors', investorWalletRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/transactions', transactionsRouter);
 app.use('/api/admin-settings', adminSettingsRouter);
+app.use('/api/referrals', referralsRouter);
 
 app.use((err, req, res, next) => {
   console.error(err);
