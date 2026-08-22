@@ -247,7 +247,7 @@ router.post(
 // ── Agent/Broker: inspection report ─────────────────────────────────────
 
 // POST /api/sell-requests/:id/report
-// Body: { agentId, media: [{ id, isVideo }], notes }
+// Body: { agentId, media: [{ id, filePath }], notes }
 router.post(
   '/:id/report',
   asyncHandler(async (req, res) => {

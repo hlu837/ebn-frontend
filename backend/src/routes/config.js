@@ -10,6 +10,8 @@
 
 const express = require('express');
 
+const investorMembershipPlanModel = require('../models/investorMembershipPlan');
+
 const router = express.Router();
 
 // Addis Ababa — used as the map's default center when the app doesn't
@@ -31,6 +33,23 @@ router.get('/map', (req, res) => {
     styleUrl: 'https://tiles.openfreemap.org/styles/liberty',
     defaultCenter: DEFAULT_CENTER,
   });
+});
+
+// Investor "Shareholder & Investor Membership" plan — price, benefits,
+// and copy shown during signup/upgrade, before the user is authenticated.
+// Admin-editable at PUT /api/admin-settings/investor-membership-plan.
+router.get('/investor-membership-plan', async (req, res, next) => {
+  try {
+    const row = await investorMembershipPlanModel.get();
+    if (!row) {
+      return res.status(503).json({
+        error: 'Investor membership plan is not configured on the server yet.',
+      });
+    }
+    res.json(investorMembershipPlanModel.toPublic(row));
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = { router };
