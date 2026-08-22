@@ -5,6 +5,7 @@ import '../models/auth_response.dart';
 import '../services/agent_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/agent_drawer.dart' show AgentTier, AgentTierX;
+import 'investor_membership_plan_select_screen.dart';
 
 String _formatMoney(double value) {
   final s = value.abs().toStringAsFixed(0);
@@ -75,6 +76,15 @@ class _AgentMembershipScreenState extends State<AgentMembershipScreen> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => _TierPickerSheet(
         currentTier: currentTier,
+        onUpgradeToInvestor: () {
+          Navigator.of(context).pop();
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  InvestorMembershipPlanSelectScreen(user: widget.user),
+            ),
+          );
+        },
         onSelect: (tier) async {
           Navigator.of(context).pop();
           if (tier == currentTier) return;
@@ -198,6 +208,34 @@ class _AgentMembershipScreenState extends State<AgentMembershipScreen> {
                           label: const Text('Manage plan'),
                         ),
                       ),
+                      if (tier == AgentTier.gold) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF6366F1),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(AppRadii.md)),
+                            ),
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => InvestorMembershipPlanSelectScreen(
+                                      user: widget.user),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.trending_up_rounded, size: 18),
+                            label: const Text(
+                              'Upgrade to Shareholder & Investor',
+                              style: TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -383,9 +421,14 @@ class _BillingTile extends StatelessWidget {
 }
 
 class _TierPickerSheet extends StatelessWidget {
-  const _TierPickerSheet({required this.currentTier, required this.onSelect});
+  const _TierPickerSheet({
+    required this.currentTier,
+    required this.onSelect,
+    required this.onUpgradeToInvestor,
+  });
   final AgentTier currentTier;
   final ValueChanged<AgentTier> onSelect;
+  final VoidCallback onUpgradeToInvestor;
 
   List<AgentTier> _upgradeTargets(AgentTier currentTier) {
     const tierOrder = <AgentTier>[
@@ -441,30 +484,81 @@ class _TierPickerSheet extends StatelessWidget {
           ] else ...[
             Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                 child: Column(
                   children: [
-                    Icon(currentTier.icon, size: 44, color: currentTier.color),
-                    const SizedBox(height: AppSpacing.sm),
+                    Icon(currentTier.icon, size: 36, color: currentTier.color),
+                    const SizedBox(height: AppSpacing.xs),
                     Text(
-                      'You are on the highest plan (${currentTier.label})',
+                      'You are on the highest agent plan (${currentTier.label})',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 13.5,
                           fontWeight: FontWeight.w800,
                           color: AppColors.ink),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'You already enjoy all premium features and top priority benefits.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, color: AppColors.slate),
                     ),
                   ],
                 ),
               ),
             ),
           ],
+          const SizedBox(height: AppSpacing.md),
+
+          // Shareholder & Investor Membership Upgrade Option
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: const Color(0xFF6366F1).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(AppRadii.lg),
+              border: Border.all(
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.4)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.workspace_premium_rounded,
+                        color: Color(0xFF6366F1), size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Shareholder & Investor',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF6366F1)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Upgrade to executive access, dividend payouts & fractional investments.',
+                  style: TextStyle(
+                      fontSize: 11.5, color: AppColors.ink, height: 1.3),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6366F1),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadii.md)),
+                    ),
+                    onPressed: onUpgradeToInvestor,
+                    icon: const Icon(Icons.trending_up_rounded, size: 16),
+                    label: const Text('Upgrade to Investor Membership',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 13)),
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: AppSpacing.md),
         ],
       ),
