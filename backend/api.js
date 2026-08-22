@@ -1,8 +1,9 @@
 const { app, CORS_ORIGIN, rearmPendingExpiries, investmentPayoutScheduler } = require('./src/app');
 const { createServer } = require('http');
 
-// Fresh deploy trigger for Vercel: this branch is intentionally changed so a new.
-// deployment is created from a new commit instead of reusing the prior revision.
+// Fresh deploy trigger for Vercel [2026-08-22]: force rebuild to pick up
+// pending-signup fix — createPending null-guard in auth.js, updated toPublic
+// fields (accountStatus, pendingRole), and signin pending_payment enforcement.
 // Vercel provides an auto-handled HTTP server for serverless functions.
 // We can still create a server for Socket.IO when running locally, but
 // in Vercel serverless mode, only the request handler is used.

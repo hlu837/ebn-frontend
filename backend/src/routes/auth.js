@@ -120,6 +120,15 @@ router.post(
         referralCode: referralCode ? String(referralCode).trim() : null,
       });
 
+      // Guard: if the DB insert returned nothing (schema mismatch, constraint
+      // error swallowed by the driver, etc.) surface a hard 500 immediately
+      // rather than silently falling through to model.create() below and
+      // creating a fully-active visitor account instead of a pending one.
+      if (!row) {
+        console.error('[auth/signup] createPending returned no row — possible DB schema mismatch');
+        return res.status(500).json({ error: 'Failed to create pending account. Please try again.' });
+      }
+
       const user = model.toPublic(row);
 
       return res.status(200).json({
