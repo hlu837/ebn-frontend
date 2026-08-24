@@ -212,7 +212,7 @@ function listBroadcastingForAgent(agentId) {
 /** Everything this agent currently has (or has had) assigned to them. */
 function listAssignedToAgent(agentId) {
   return query(
-    `SELECT * FROM order_requests WHERE assigned_agent_id = $1::uuid ORDER BY created_at DESC`,
+    `SELECT * FROM order_requests WHERE assigned_agent_id = $1 ORDER BY created_at DESC`,
     [agentId]
   ).then((r) => r.rows);
 }
@@ -222,12 +222,10 @@ function listAssignedToAgent(agentId) {
  * still `broadcasting` and this agent is not excluded.
  */
 async function claim(id, { agentId, agentName, agentPhone }) {
-  // $2 = agentId as UUID (for assigned_agent_id column)
-  // $5 = agentId as TEXT (for TEXT[] array comparisons — same value, different type binding)
   const row = await query(
     `UPDATE order_requests
      SET status = 'agent_confirmed'::order_request_status,
-         assigned_agent_id = $2::uuid,
+         assigned_agent_id = $2,
          assigned_agent_name = $3,
          assigned_agent_phone = $4,
          confirmed_at = now()

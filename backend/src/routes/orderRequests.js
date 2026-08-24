@@ -57,10 +57,14 @@ router.post(
         const geocoded = await geocodeAddress(String(body.addressText).trim());
         latitude = geocoded.latitude;
         longitude = geocoded.longitude;
-        addressText = geocoded.formattedAddress;
+        addressText = geocoded.formattedAddress || String(body.addressText).trim();
       } catch (err) {
-        const status = err instanceof GeocodingError ? 422 : 500;
-        return res.status(status).json({ error: err.message });
+        // Soft fallback to default city coordinates if address cannot be resolved,
+        // ensuring order request submission is not blocked for the user.
+        latitude = 9.0108;
+        longitude = 38.7617;
+        addressText = String(body.addressText).trim();
+        console.warn(`[orderRequests] geocoding failed for manual address "${body.addressText}", using fallback coordinates: ${err.message}`);
       }
     }
 

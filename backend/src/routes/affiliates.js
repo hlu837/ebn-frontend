@@ -291,6 +291,10 @@ router.post(
     if (!tier || !membershipModel.TIERS.includes(tier)) {
       return res.status(400).json({ error: `tier must be one of: ${membershipModel.TIERS.join(', ')}.` });
     }
+    const current = await membershipModel.getOrCreate(req.user.id);
+    if (membershipModel.TIERS.indexOf(tier) < membershipModel.TIERS.indexOf(current.tier)) {
+      return res.status(400).json({ error: 'Downgrading isn\'t available — you can only move to a higher tier.' });
+    }
     const row = await membershipModel.setTier(req.user.id, tier);
     res.json(membershipModel.toPublic(row));
   })
@@ -342,7 +346,9 @@ router.patch(
 
     let bankAccountLast4;
     if (bankAccountNumber !== undefined) {
-      const full = String(bankAccountNumber).trim();
+      // Strip spaces/dashes so numbers copied from a bank app/statement
+      // (e.g. "1000 2345 6789" or "1000-2345-6789") still validate.
+      const full = String(bankAccountNumber).replace(/[\s-]/g, '').trim();
       if (!/^\d{4,34}$/.test(full)) {
         return res.status(400).json({ error: 'bankAccountNumber must be 4-34 digits.' });
       }

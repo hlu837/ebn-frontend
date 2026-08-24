@@ -9,6 +9,7 @@ const adminAccountsModel = require('../models/adminAccounts');
 const usersModel = require('../models/users');
 const activityLogModel = require('../models/activityLog');
 const membershipPricingModel = require('../models/membershipPricing');
+const investorMembershipPlanModel = require('../models/investorMembershipPlan');
 const { requireAuth } = require('./auth');
 
 const router = express.Router();
@@ -337,6 +338,50 @@ router.patch(
       detail: `${role} ${tier}: ${monthlyFeeEtb} ETB`,
     });
     res.json(row);
+  })
+);
+
+// ── Investor Membership Plan ─────────────────────────────────────────────
+
+router.get(
+  '/investor-membership-plan',
+  asyncHandler(async (req, res) => {
+    const row = await investorMembershipPlanModel.get();
+    res.json(investorMembershipPlanModel.toPublic(row));
+  })
+);
+
+router.put(
+  '/investor-membership-plan',
+  asyncHandler(async (req, res) => {
+    const { title, description, priceEtb, benefits, footerNote, tierKey } = req.body || {};
+
+    if (title !== undefined && !String(title).trim()) {
+      return res.status(400).json({ error: 'title cannot be empty.' });
+    }
+    if (priceEtb !== undefined && (!Number.isFinite(priceEtb) || priceEtb < 0)) {
+      return res.status(400).json({ error: 'priceEtb must be a non-negative number.' });
+    }
+    if (benefits !== undefined) {
+      if (!Array.isArray(benefits) || benefits.some((b) => typeof b !== 'string')) {
+        return res.status(400).json({ error: 'benefits must be an array of strings.' });
+      }
+    }
+
+    const row = await investorMembershipPlanModel.update({
+      title: title !== undefined ? String(title).trim() : undefined,
+      description: description !== undefined ? String(description).trim() : undefined,
+      priceEtb,
+      benefits,
+      footerNote: footerNote !== undefined ? String(footerNote).trim() : undefined,
+      tierKey,
+    });
+    await logAction(req, {
+      action: 'investor_membership_plan_updated',
+      targetType: 'investor_membership_plan',
+      targetId: 'investor_shareholder',
+    });
+    res.json(investorMembershipPlanModel.toPublic(row));
   })
 );
 

@@ -18,6 +18,16 @@ function toPublic(row) {
     longitude: row.longitude !== null ? Number(row.longitude) : 0,
     attributes: row.attributes,
     image_url: row.image_url,
+    // Full ordered gallery for the detail screen's carousel. Falls back to
+    // a one-item array built from image_url for any row that somehow has
+    // no image_urls yet (belt-and-suspenders alongside the migration
+    // backfill — e.g. a row inserted directly against an older schema).
+    image_urls:
+      Array.isArray(row.image_urls) && row.image_urls.length
+        ? row.image_urls
+        : row.image_url
+        ? [row.image_url]
+        : [],
     posted_label: row.posted_label,
     broker_id: row.broker_id,
     rating: row.rating !== null ? Number(row.rating) : null,
@@ -92,19 +102,27 @@ function create({
   longitude,
   attributes,
   imageUrl,
+  imageUrls,
   postedLabel,
   brokerId,
   rating,
   reviewCount,
   roiPercent,
 }) {
+  // `imageUrls` is the full gallery; `imageUrl` is the cover photo shown on
+  // listing cards. If only one of the two was supplied, derive the other
+  // so they never disagree (card always shows imageUrls[0]).
+  const gallery = Array.isArray(imageUrls) ? imageUrls.filter(Boolean) : [];
+  const cover = imageUrl || gallery[0] || null;
+  const resolvedGallery = gallery.length ? gallery : cover ? [cover] : [];
+
   return query(
     `INSERT INTO assets (
        title, price_amount, price_currency, category_slug, status,
        address_line, city, latitude, longitude, attributes, image_url,
-       posted_label, broker_id, rating, review_count, roi_percent
+       image_urls, posted_label, broker_id, rating, review_count, roi_percent
      )
-     VALUES ($1, $2, $3, $4, $5::asset_status, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16)
+     VALUES ($1, $2, $3, $4, $5::asset_status, $6, $7, $8, $9, $10::jsonb, $11, $12::jsonb, $13, $14, $15, $16, $17)
      RETURNING *`,
     [
       title,
@@ -117,7 +135,8 @@ function create({
       latitude || 0,
       longitude || 0,
       JSON.stringify(attributes || {}),
-      imageUrl || null,
+      cover,
+      JSON.stringify(resolvedGallery),
       postedLabel || null,
       brokerId || null,
       rating ?? null,
@@ -142,6 +161,11 @@ const PATCHABLE_FIELDS = {
   longitude: { column: 'longitude', cast: '' },
   attributes: { column: 'attributes', cast: '::jsonb', serialize: (v) => JSON.stringify(v ?? {}) },
   imageUrl: { column: 'image_url', cast: '' },
+  imageUrls: {
+    column: 'image_urls',
+    cast: '::jsonb',
+    serialize: (v) => JSON.stringify(Array.isArray(v) ? v.filter(Boolean) : []),
+  },
   postedLabel: { column: 'posted_label', cast: '' },
   brokerId: { column: 'broker_id', cast: '' },
   rating: { column: 'rating', cast: '' },
