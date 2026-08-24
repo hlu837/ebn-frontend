@@ -52,7 +52,6 @@ router.post(
       latitude = geocoded.latitude;
       longitude = geocoded.longitude;
     } catch (err) {
-      if (!(err instanceof GeocodingError)) throw err;
       // eslint-disable-next-line no-console
       console.warn(`[sellRequests] geocoding failed for submission, will fall back to open_to_brokers: ${err.message}`);
     }
@@ -107,7 +106,6 @@ router.post(
       latitude = geocoded.latitude;
       longitude = geocoded.longitude;
     } catch (err) {
-      if (!(err instanceof GeocodingError)) throw err;
       // eslint-disable-next-line no-console
       console.warn(`[sellRequests] geocoding failed for agent listing, will fall back to null location: ${err.message}`);
     }

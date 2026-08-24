@@ -38,7 +38,7 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 
 const app = express();
 app.use(cors({ origin: CORS_ORIGIN === '*' ? true : CORS_ORIGIN.split(',').map((s) => s.trim()) }));
-app.use(express.json({ limit: '6mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 app.get('/', (req, res) => {
   res.json({ status: 'online', message: 'EBN API Server is running' });
@@ -82,7 +82,8 @@ app.use('/api/referrals', referralsRouter);
 
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(500).json({ error: 'Internal server error.' });
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({ error: err.message || 'Internal server error.' });
 });
 
 async function rearmPendingExpiries() {
