@@ -39,12 +39,12 @@ async function getOrCreate(userId) {
 function update(userId, { avatarUrl, bio, city, specialties }) {
   return query(
     `INSERT INTO agent_profiles (user_id, avatar_url, bio, city, specialties)
-     VALUES ($1, $2, COALESCE($3, ''), COALESCE($4, ''), COALESCE($5, '{}'))
+    VALUES ($1, $2, COALESCE($3, ''), COALESCE($4, ''), COALESCE($5::text[], '{}'::text[]))
      ON CONFLICT (user_id) DO UPDATE
        SET avatar_url = COALESCE($2, agent_profiles.avatar_url),
            bio = COALESCE($3, agent_profiles.bio),
            city = COALESCE($4, agent_profiles.city),
-           specialties = COALESCE($5, agent_profiles.specialties)
+           specialties = COALESCE($5::text[], agent_profiles.specialties)
      RETURNING *`,
     [userId, avatarUrl ?? null, bio ?? null, city ?? null, specialties ?? null]
   ).then((r) => r.rows[0]);
