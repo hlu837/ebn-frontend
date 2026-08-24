@@ -43,17 +43,36 @@ async function activatePaidSignup(payment) {
   if (!role) return;
 
   let userId = payment.owner_user_id;
-
-  if (!userId && payment.pending_user_payload) {
-    const payload = typeof payment.pending_user_payload === 'string'
+  let payload;
+  if (payment.pending_user_payload) {
+    payload = typeof payment.pending_user_payload === 'string'
       ? JSON.parse(payment.pending_user_payload)
       : payment.pending_user_payload;
+  }
 
-    const existing = await usersModel.findByEmail(payload.email);
-    if (existing) {
-      userId = existing.id;
-      await usersModel.activatePendingRole(userId, role);
-    } else {
+  // The payment may have been created before the pending user ID was known,
+  // or may contain a stale owner ID from a previous client session. Resolve
+  // the account by ID first and fall back to the email in the saved payload.
+  let existing = userId ? await usersModel.findById(userId) : null;
+  if (!existing && payload?.email) {
+    existing = await usersModel.findByEmail(payload.email);
+  }
+
+  if (existing) {
+    userId = existing.id;
+    if (existing.role !== role) {
+      const activated = await usersModel.activatePendingRole(userId, role);
+      if (!activated) {
+        console.error('[payments] payment succeeded but pending role activation matched no eligible user', {
+          userId,
+          role,
+          accountStatus: existing.account_status,
+          pendingRole: existing.pending_role,
+        });
+        return;
+      }
+    }
+  } else if (payload) {
       const passwordHash = await bcrypt.hash(payload.password, 10);
       const newUser = await usersModel.create({
         fullName: payload.fullName,
@@ -103,9 +122,6 @@ async function activatePaidSignup(payment) {
           console.error('[payments] failed to link investor sponsor', e);
         }
       }
-    }
-  } else if (userId) {
-    await usersModel.activatePendingRole(userId, role);
   }
 
   if (!userId) return;
