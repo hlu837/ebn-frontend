@@ -888,7 +888,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
                 ),
               ],
             ),
-            if (loop.isRinging)
+            if (loop.stage == LoopStage.dispatched)
               _RingingOverlay(loop: loop, agentId: widget.user.id),
           ],
         ),
@@ -1377,14 +1377,30 @@ class _BroadcastingToursBannerState extends State<_BroadcastingToursBanner> {
 /// Full-screen overlay that appears the instant Admin dispatches this agent
 /// while they're online — matches the platform's ink/yellow language even
 /// though it's a dark "focus" moment layered over the light feed below.
-class _RingingOverlay extends StatelessWidget {
+class _RingingOverlay extends StatefulWidget {
   const _RingingOverlay({required this.loop, required this.agentId});
 
   final LoopController loop;
   final String agentId;
 
   @override
+  State<_RingingOverlay> createState() => _RingingOverlayState();
+}
+
+class _RingingOverlayState extends State<_RingingOverlay> {
+  bool _responding = false;
+
+  void _showError(BuildContext context) {
+    final error = widget.loop.lastError;
+    if (error != null && error.isNotEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final loop = widget.loop;
     final asset = loop.requestedAsset;
     return Positioned.fill(
       child: Container(
@@ -1445,7 +1461,17 @@ class _RingingOverlay extends StatelessWidget {
                       label: 'Decline',
                       borderColor: AppColors.danger,
                       textColor: AppColors.danger,
-                      onPressed: () => loop.agentDecline(agentId),
+                      onPressed: _responding
+                          ? null
+                          : () async {
+                              setState(() => _responding = true);
+                              await loop.agentDecline(widget.agentId);
+                              if (!context.mounted) return;
+                              if (loop.stage == LoopStage.dispatched) {
+                                _showError(context);
+                                setState(() => _responding = false);
+                              }
+                            },
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
@@ -1454,7 +1480,18 @@ class _RingingOverlay extends StatelessWidget {
                       label: 'Accept',
                       backgroundColor: AppColors.primaryYellow,
                       foregroundColor: Colors.white,
-                      onPressed: () => loop.agentAccept(agentId),
+                      isLoading: _responding,
+                      onPressed: _responding
+                          ? null
+                          : () async {
+                              setState(() => _responding = true);
+                              await loop.agentAccept(widget.agentId);
+                              if (!context.mounted) return;
+                              if (loop.stage == LoopStage.dispatched) {
+                                _showError(context);
+                                setState(() => _responding = false);
+                              }
+                            },
                     ),
                   ),
                 ],

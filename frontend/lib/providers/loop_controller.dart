@@ -124,6 +124,10 @@ class LoopController extends ChangeNotifier {
 
   bool get isRinging => stage == LoopStage.dispatched && agentOnline;
 
+  /// Whether this viewer must finish the current tour request before
+  /// requesting a visit for another listing.
+  bool get hasActiveCustomerRequest => stage != LoopStage.idle;
+
   // ── Customer ──────────────────────────────────────────────────────────
   /// POST /api/tour-requests — submits a new tour request for [asset]. If
   /// the listing has a real agent credited to it, the backend dispatches

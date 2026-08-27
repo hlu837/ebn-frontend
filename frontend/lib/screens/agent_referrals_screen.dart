@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -87,7 +89,8 @@ class _Referral {
       category: category,
       feePercent: (json['feePercent'] as num?)?.toDouble() ?? 10.0,
       status: status,
-      date: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+      date: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+          DateTime.now(),
       notes: json['notes'] as String?,
     );
   }
@@ -102,24 +105,33 @@ class AgentReferralsScreen extends StatefulWidget {
   State<AgentReferralsScreen> createState() => _AgentReferralsScreenState();
 }
 
-class _AgentReferralsScreenState extends State<AgentReferralsScreen> with SingleTickerProviderStateMixin {
-  late final TabController _tabController = TabController(length: 2, vsync: this);
+class _AgentReferralsScreenState extends State<AgentReferralsScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController =
+      TabController(length: 2, vsync: this);
   final AgentService _agentService = AgentService();
 
   List<_Referral> _referrals = [];
   bool _loading = true;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _loadReferrals();
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _loadReferrals(showLoading: false),
+    );
   }
 
-  Future<void> _loadReferrals() async {
-    setState(() => _loading = true);
+  Future<void> _loadReferrals({bool showLoading = true}) async {
+    if (showLoading && mounted) setState(() => _loading = true);
     try {
-      final rows = await _agentService.fetchReferrals(token: widget.user.token ?? '');
-      final list = rows.map((r) => _Referral.fromJson(r, widget.user.id)).toList();
+      final rows =
+          await _agentService.fetchReferrals(token: widget.user.token ?? '');
+      final list =
+          rows.map((r) => _Referral.fromJson(r, widget.user.id)).toList();
       if (!mounted) return;
       setState(() {
         _referrals = list;
@@ -131,11 +143,14 @@ class _AgentReferralsScreenState extends State<AgentReferralsScreen> with Single
     }
   }
 
-  List<_Referral> get _sent => _referrals.where((r) => r.isSent).toList()..sort((a, b) => b.date.compareTo(a.date));
-  List<_Referral> get _received => _referrals.where((r) => !r.isSent).toList()..sort((a, b) => b.date.compareTo(a.date));
+  List<_Referral> get _sent => _referrals.where((r) => r.isSent).toList()
+    ..sort((a, b) => b.date.compareTo(a.date));
+  List<_Referral> get _received => _referrals.where((r) => !r.isSent).toList()
+    ..sort((a, b) => b.date.compareTo(a.date));
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -145,7 +160,8 @@ class _AgentReferralsScreenState extends State<AgentReferralsScreen> with Single
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.cloud,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => _SendReferralSheet(
         onSend: (_) => _loadReferrals(),
         currentUserId: widget.user.id,
@@ -161,14 +177,16 @@ class _AgentReferralsScreenState extends State<AgentReferralsScreen> with Single
       appBar: AppBar(
         backgroundColor: AppColors.cloud,
         foregroundColor: AppColors.ink,
-        title: const Text('Referrals', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+        title: const Text('Referrals',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.ink,
           unselectedLabelColor: AppColors.slate,
           indicatorColor: AppColors.primaryYellow,
           indicatorWeight: 3,
-          labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          labelStyle:
+              const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
           tabs: [
             Tab(text: 'Sent (${_sent.length})'),
             Tab(text: 'Received (${_received.length})'),
@@ -180,7 +198,8 @@ class _AgentReferralsScreenState extends State<AgentReferralsScreen> with Single
         foregroundColor: Colors.white,
         onPressed: _openSendReferralSheet,
         icon: const Icon(Icons.handshake_outlined),
-        label: const Text('Send Referral', style: TextStyle(fontWeight: FontWeight.w800)),
+        label: const Text('Send Referral',
+            style: TextStyle(fontWeight: FontWeight.w800)),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -189,8 +208,10 @@ class _AgentReferralsScreenState extends State<AgentReferralsScreen> with Single
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _referralList(_sent, emptyText: "You haven't sent any referrals yet."),
-                  _referralList(_received, emptyText: 'No referrals from other agents yet.'),
+                  _referralList(_sent,
+                      emptyText: "You haven't sent any referrals yet."),
+                  _referralList(_received,
+                      emptyText: 'No referrals from other agents yet.'),
                 ],
               ),
             ),
@@ -205,16 +226,21 @@ class _AgentReferralsScreenState extends State<AgentReferralsScreen> with Single
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.handshake_outlined, size: 40, color: AppColors.slate),
+              const Icon(Icons.handshake_outlined,
+                  size: 40, color: AppColors.slate),
               const SizedBox(height: AppSpacing.sm),
-              Text(emptyText, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13.5, color: AppColors.slate)),
+              Text(emptyText,
+                  textAlign: TextAlign.center,
+                  style:
+                      const TextStyle(fontSize: 13.5, color: AppColors.slate)),
             ],
           ),
         ),
       );
     }
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 96),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 96),
       itemCount: items.length,
       separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
       itemBuilder: (context, i) => _ReferralCard(referral: items[i]),
@@ -236,7 +262,10 @@ class _ReferralCard extends StatelessWidget {
     final r = referral;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(AppRadii.lg), border: Border.all(color: AppColors.border)),
+      decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(AppRadii.lg),
+          border: Border.all(color: AppColors.border)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -247,11 +276,18 @@ class _ReferralCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(r.clientName, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                    Text(r.clientName,
+                        style: const TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.ink)),
                     const SizedBox(height: 2),
                     Text(
-                      r.isSent ? 'Referred to ${r.counterpartName}' : 'Referred by ${r.counterpartName}',
-                      style: const TextStyle(fontSize: 12, color: AppColors.slate),
+                      r.isSent
+                          ? 'Referred to ${r.counterpartName}'
+                          : 'Referred by ${r.counterpartName}',
+                      style:
+                          const TextStyle(fontSize: 12, color: AppColors.slate),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -260,8 +296,14 @@ class _ReferralCard extends StatelessWidget {
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: r.status.color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(AppRadii.pill)),
-                child: Text(r.status.label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: r.status.color)),
+                decoration: BoxDecoration(
+                    color: r.status.color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(AppRadii.pill)),
+                child: Text(r.status.label,
+                    style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        color: r.status.color)),
               ),
             ],
           ),
@@ -270,16 +312,27 @@ class _ReferralCard extends StatelessWidget {
             children: [
               const Icon(Icons.sell_outlined, size: 15, color: AppColors.slate),
               const SizedBox(width: 6),
-              Text(r.category.label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.ink)),
+              Text(r.category.label,
+                  style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink)),
               const SizedBox(width: 14),
-              const Icon(Icons.percent_rounded, size: 15, color: AppColors.slate),
+              const Icon(Icons.percent_rounded,
+                  size: 15, color: AppColors.slate),
               const SizedBox(width: 6),
-              Text('${r.feePercent.toStringAsFixed(0)}% fee share', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.ink)),
+              Text('${r.feePercent.toStringAsFixed(0)}% fee share',
+                  style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink)),
             ],
           ),
           if (r.notes != null) ...[
             const SizedBox(height: 8),
-            Text(r.notes!, style: const TextStyle(fontSize: 12.5, color: AppColors.slate, height: 1.4)),
+            Text(r.notes!,
+                style: const TextStyle(
+                    fontSize: 12.5, color: AppColors.slate, height: 1.4)),
           ],
           const SizedBox(height: 10),
           Row(
@@ -296,9 +349,14 @@ class _ReferralCard extends StatelessWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.call_rounded, size: 15, color: AppColors.ink),
+                          Icon(Icons.call_rounded,
+                              size: 15, color: AppColors.ink),
                           SizedBox(width: 5),
-                          Text('Call client', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                          Text('Call client',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.ink)),
                         ],
                       ),
                     ),
@@ -353,7 +411,8 @@ class _SendReferralSheetState extends State<_SendReferralSheet> {
       _error = null;
     });
     try {
-      final rows = await _agentService.fetchDirectory(excludeUserId: widget.currentUserId);
+      final rows = await _agentService.fetchDirectory(
+          excludeUserId: widget.currentUserId);
       final brokers = rows.map(Broker.fromDirectoryJson).toList();
       if (!mounted) return;
       setState(() {
@@ -377,7 +436,11 @@ class _SendReferralSheetState extends State<_SendReferralSheet> {
     super.dispose();
   }
 
-  bool get _canSend => !_submitting && _broker != null && _nameController.text.trim().isNotEmpty && _phoneController.text.trim().isNotEmpty;
+  bool get _canSend =>
+      !_submitting &&
+      _broker != null &&
+      _nameController.text.trim().isNotEmpty &&
+      _phoneController.text.trim().isNotEmpty;
 
   Future<void> _submit() async {
     if (!_canSend) return;
@@ -389,40 +452,62 @@ class _SendReferralSheetState extends State<_SendReferralSheet> {
         clientPhone: _phoneController.text.trim(),
         categorySlug: _category.slug,
         feePercent: _fee,
-        notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+        notes: _notesController.text.trim().isEmpty
+            ? null
+            : _notesController.text.trim(),
         token: widget.userToken,
       );
       if (!mounted) return;
       widget.onSend(_Referral.fromJson(res, widget.currentUserId));
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Referral sent & saved.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Referral sent & saved.')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg),
+      padding: EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg,
+          MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: AppSpacing.md), decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
-            const Text('Send a Referral', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink)),
+            Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2))),
+            const Text('Send a Referral',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink)),
             const SizedBox(height: AppSpacing.md),
-            const Text('Refer to', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.slate)),
+            const Text('Refer to',
+                style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.slate)),
             const SizedBox(height: 6),
             DropdownButtonFormField<Broker>(
               initialValue: _broker,
               hint: Text(_loading ? 'Loading brokers…' : 'Choose a broker'),
               isExpanded: true,
               items: _brokers
-                  .map((b) => DropdownMenuItem(value: b, child: Text('${b.name} — ${b.company}', overflow: TextOverflow.ellipsis)))
+                  .map((b) => DropdownMenuItem(
+                      value: b,
+                      child: Text('${b.name} — ${b.company}',
+                          overflow: TextOverflow.ellipsis)))
                   .toList(),
               onChanged: _loading ? null : (b) => setState(() => _broker = b),
             ),
@@ -432,19 +517,26 @@ class _SendReferralSheetState extends State<_SendReferralSheet> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(_error!, style: const TextStyle(fontSize: 12, color: AppColors.slate)),
+                      child: Text(_error!,
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.slate)),
                     ),
-                    TextButton(onPressed: _loadBrokers, child: const Text('Retry')),
+                    TextButton(
+                        onPressed: _loadBrokers, child: const Text('Retry')),
                   ],
                 ),
               )
             else if (!_loading && _brokers.isEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: 6),
-                child: Text('No other brokers on the platform yet.', style: TextStyle(fontSize: 12, color: AppColors.slate)),
+                child: Text('No other brokers on the platform yet.',
+                    style: TextStyle(fontSize: 12, color: AppColors.slate)),
               ),
             const SizedBox(height: AppSpacing.md),
-            TextField(controller: _nameController, decoration: const InputDecoration(labelText: "Client's name"), onChanged: (_) => setState(() {})),
+            TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: "Client's name"),
+                onChanged: (_) => setState(() {})),
             const SizedBox(height: AppSpacing.sm),
             TextField(
               controller: _phoneController,
@@ -453,16 +545,26 @@ class _SendReferralSheetState extends State<_SendReferralSheet> {
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: AppSpacing.sm),
-            const Text('What are they looking for?', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.slate)),
+            const Text('What are they looking for?',
+                style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.slate)),
             const SizedBox(height: 6),
             DropdownButtonFormField<AssetCategorySlug>(
               initialValue: _category,
               isExpanded: true,
-              items: AssetCategorySlug.values.map((c) => DropdownMenuItem(value: c, child: Text(c.label))).toList(),
+              items: AssetCategorySlug.values
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c.label)))
+                  .toList(),
               onChanged: (c) => setState(() => _category = c ?? _category),
             ),
             const SizedBox(height: AppSpacing.md),
-            Text('Fee share: ${_fee.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.slate)),
+            Text('Fee share: ${_fee.toStringAsFixed(0)}%',
+                style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.slate)),
             Slider(
               value: _fee,
               min: 5,
@@ -473,9 +575,15 @@ class _SendReferralSheetState extends State<_SendReferralSheet> {
               onChanged: (v) => setState(() => _fee = v),
             ),
             const SizedBox(height: AppSpacing.sm),
-            TextField(controller: _notesController, maxLines: 3, decoration: const InputDecoration(labelText: 'Notes (optional)')),
+            TextField(
+                controller: _notesController,
+                maxLines: 3,
+                decoration:
+                    const InputDecoration(labelText: 'Notes (optional)')),
             const SizedBox(height: AppSpacing.lg),
-            ElevatedButton(onPressed: _canSend ? _submit : null, child: const Text('Send Referral')),
+            ElevatedButton(
+                onPressed: _canSend ? _submit : null,
+                child: const Text('Send Referral')),
           ],
         ),
       ),

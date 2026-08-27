@@ -286,8 +286,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
         (f) => f.isFavorite(widget.asset.id));
     final isThisRequested = loop.requestedAsset?.id == widget.asset.id &&
         loop.stage != LoopStage.idle;
-    final hasActiveRequest = loop.stage != LoopStage.idle;
-    final canRequest = !hasActiveRequest;
+    final hasActiveRequest = loop.hasActiveCustomerRequest;
 
     return Scaffold(
       backgroundColor: AppColors.cloud,
@@ -445,7 +444,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
           padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.sm),
           child: FilledButton(
-            onPressed: !canRequest ? null : () => _requestTour(),
+            onPressed: hasActiveRequest ? null : () => _requestTour(),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primaryYellow,
               foregroundColor: Colors.white,
@@ -572,7 +571,27 @@ class _HeroImageCarousel extends StatefulWidget {
 
 class _HeroImageCarouselState extends State<_HeroImageCarousel> {
   final PageController _controller = PageController();
+  late List<ImageProvider<Object>?> _providers;
   int _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _providers = _buildProviders(widget.imageUrls);
+  }
+
+  List<ImageProvider<Object>?> _buildProviders(List<String> urls) {
+    return urls.map(dataUrlOrNetworkImage).toList();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HeroImageCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageUrls != widget.imageUrls) {
+      _providers = _buildProviders(widget.imageUrls);
+      if (_page >= _providers.length) _page = 0;
+    }
+  }
 
   @override
   void dispose() {
@@ -589,7 +608,7 @@ class _HeroImageCarouselState extends State<_HeroImageCarousel> {
     }
 
     if (urls.length == 1) {
-      final provider = dataUrlOrNetworkImage(urls.first);
+      final provider = _providers.first;
       return Stack(
         fit: StackFit.expand,
         children: [
@@ -597,6 +616,7 @@ class _HeroImageCarouselState extends State<_HeroImageCarousel> {
             Image(
               image: provider,
               fit: BoxFit.cover,
+              gaplessPlayback: true,
               errorBuilder: (context, error, stack) =>
                   _ImageFallback(icon: widget.categoryIcon),
             )
@@ -615,11 +635,12 @@ class _HeroImageCarouselState extends State<_HeroImageCarousel> {
           itemCount: urls.length,
           onPageChanged: (i) => setState(() => _page = i),
           itemBuilder: (context, index) {
-            final provider = dataUrlOrNetworkImage(urls[index]);
+            final provider = _providers[index];
             return provider != null
                 ? Image(
                     image: provider,
                     fit: BoxFit.cover,
+                    gaplessPlayback: true,
                     errorBuilder: (context, error, stack) =>
                         _ImageFallback(icon: widget.categoryIcon),
                   )
