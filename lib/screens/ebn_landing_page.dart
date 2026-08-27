@@ -61,8 +61,6 @@ class EBNLandingPage extends StatefulWidget {
 }
 
 class _EBNLandingPageState extends State<EBNLandingPage> {
-  int _selectedTab = 0;
-
   // Only used by the static fallback banner (`_buildInspectionBanner`),
   // shown when there are no admin-authored company ads yet.
   final int _bannerIndex = 0;
@@ -121,13 +119,6 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
       setState(() => _assetsLoading = false);
     }
   }
-
-  final List<String> _tabs = const [
-    'For You',
-    'Vehicles',
-    'Real Estate',
-    'Machinery',
-  ];
 
   final List<QuickAction> _actions = const [
     QuickAction(Icons.add, 'Post Ad', highlighted: true),
@@ -234,32 +225,6 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
     }
   }
 
-  void _handleTabSelect(int index) {
-    setState(() => _selectedTab = index);
-    if (index == 1) {
-      // Vehicles
-      _goToCategory(
-        AssetCategorySlug.vehicles,
-        'Vehicles',
-        Icons.directions_car_outlined,
-      );
-    } else if (index == 2) {
-      // Real Estate
-      _goToCategory(
-        AssetCategorySlug.house,
-        'Real Estate',
-        Icons.home_outlined,
-      );
-    } else if (index == 3) {
-      // Machinery
-      _goToCategory(
-        AssetCategorySlug.machinery,
-        'Machinery',
-        Icons.terrain_outlined,
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -268,8 +233,6 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
           padding: EdgeInsets.zero,
           children: [
             _buildHeader(),
-            _buildSearchBar(),
-            _buildTabs(),
             _buildSafetyBanner(),
             if (_companyAdsLoading)
               const SizedBox.shrink()
@@ -312,7 +275,6 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
               label: 'Main',
               onTap: () {
                 // Home / Main - stay on landing page
-                setState(() => _selectedTab = 0);
               },
             ),
             _buildBottomNavItem(
@@ -432,69 +394,6 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  // --- Search bar ------------------------------------------------------------
-
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      child: GestureDetector(
-        onTap: widget.onOpenSearch,
-        child: const Row(
-          children: [
-            Icon(Icons.search, color: EBNColors.grey, size: 20),
-            SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Search',
-                style: TextStyle(color: EBNColors.grey, fontSize: 14),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- Category tabs ---------------------------------------------------------
-
-  Widget _buildTabs() {
-    return SizedBox(
-      height: 40,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _tabs.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 4),
-        itemBuilder: (context, index) {
-          final selected = index == _selectedTab;
-          return GestureDetector(
-            onTap: () => _handleTabSelect(index),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: selected ? EBNColors.red : Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: selected
-                    ? null
-                    : Border.all(color: EBNColors.border, width: 1),
-              ),
-              child: Text(
-                _tabs[index],
-                style: TextStyle(
-                  color: selected ? Colors.white : Colors.black87,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          );
-        },
       ),
     );
   }
