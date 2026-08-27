@@ -55,15 +55,7 @@ are never stored or logged.
 ```bash
 cd backend
 npm install
-cp .env.example .env      # edit if your Postgres isn't on localhost:5432
-```
-
-Create the database and a role for the app (adjust names/password as you like —
-just make sure they match `DATABASE_URL` in `.env`):
-
-```sql
-CREATE ROLE ebn_app WITH LOGIN PASSWORD 'ebn_app_pw';
-CREATE DATABASE ebn_tours OWNER ebn_app;
+cp .env.example .env      # uses the configured Neon DATABASE_URL
 ```
 
 Run the migration:

@@ -42,12 +42,23 @@ async function create({ customerId, customerName, assetId, assetTitle }) {
        )
        VALUES (
          $1, $2, $3, $4,
-         'dispatched', $5, $6, $5,
-         $7, now(), now() + make_interval(secs => $7::int),
-         $8, $9
+         'dispatched', $5, $6, $7,
+         $8, now(), now() + make_interval(secs => $8::int),
+         $9, $10
        )
        RETURNING *`,
-      [customerId, customerName, assetId, assetTitle, creditedAgent.id, creditedAgent.full_name, DISPATCH_WINDOW_SECONDS, latitude, longitude]
+      [
+        customerId,
+        customerName,
+        assetId,
+        assetTitle,
+        creditedAgent.id,
+        creditedAgent.full_name,
+        creditedAgent.id,
+        DISPATCH_WINDOW_SECONDS,
+        latitude,
+        longitude,
+      ]
     ).then((r) => r.rows[0]);
     return row;
   }

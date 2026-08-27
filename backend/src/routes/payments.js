@@ -139,11 +139,23 @@ async function activatePaidSignup(payment) {
          SET tier = EXCLUDED.tier, renewal_date = CURRENT_DATE + INTERVAL '30 days', updated_at = now()`,
         [userId, tier]
       );
-      await query(
-        `INSERT INTO agent_membership_billing (user_id, label, amount, status, billed_on)
-         VALUES ($1, $2, $3, 'paid', CURRENT_DATE)`,
-        [userId, `Agent Membership (${tier.toUpperCase()})`, payment.amount || 0]
+
+      const billingLabel = `Agent Membership (${tier.toUpperCase()})`;
+      const existing = await query(
+        `SELECT 1 FROM agent_membership_billing
+         WHERE user_id = $1 AND label = $2 AND amount = $3 AND status = 'paid'
+           AND billed_on = CURRENT_DATE
+         LIMIT 1`,
+        [userId, billingLabel, payment.amount || 0]
       );
+
+      if (!existing.rows[0]) {
+        await query(
+          `INSERT INTO agent_membership_billing (user_id, label, amount, status, billed_on)
+           VALUES ($1, $2, $3, 'paid', CURRENT_DATE)`,
+          [userId, billingLabel, payment.amount || 0]
+        );
+      }
     } catch (err) {
       console.error('[payments] failed to update agent_memberships table:', err);
     }

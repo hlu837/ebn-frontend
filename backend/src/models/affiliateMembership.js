@@ -112,6 +112,25 @@ function listBilling(userId) {
   ).then((r) => r.rows.map(billingToPublic));
 }
 
+async function ensureBillingEntry(userId, label, fee) {
+  const existing = await query(
+    `SELECT 1 FROM affiliate_membership_billing
+     WHERE user_id = $1 AND label = $2 AND amount = $3 AND status = 'paid'
+       AND billed_on = CURRENT_DATE
+     LIMIT 1`,
+    [userId, label, fee]
+  );
+
+  if (existing.rows[0]) return null;
+
+  return query(
+    `INSERT INTO affiliate_membership_billing (user_id, label, amount, status)
+     VALUES ($1, $2, $3, 'paid')
+     RETURNING *`,
+    [userId, label, fee]
+  ).then((r) => r.rows[0]);
+}
+
 /**
  * Upgrades/downgrades the affiliate's tier, resets the 30-day renewal
  * window, and records a billing entry. Payment is treated as immediately
@@ -145,11 +164,8 @@ async function setTier(userId, tier) {
     const pricing = await getCachedTierPricing();
     const fee = pricing[tier] ?? TIER_MONTHLY_FEE_ETB[tier];
     if (fee > 0) {
-      await query(
-        `INSERT INTO affiliate_membership_billing (user_id, label, amount, status)
-         VALUES ($1, $2, $3, 'paid')`,
-        [userId, `${tier[0].toUpperCase()}${tier.slice(1)} plan — monthly`, fee]
-      );
+      const label = `${tier[0].toUpperCase()}${tier.slice(1)} plan — monthly`;
+      await ensureBillingEntry(userId, label, fee);
     }
   }
   return row;
