@@ -8,6 +8,7 @@ function toPublic(row) {
   return {
     id: row.id,
     title: row.title,
+    description: row.description,
     price_amount: Number(row.price_amount),
     price_currency: row.price_currency,
     category_slug: row.category_slug,
@@ -92,6 +93,7 @@ function listByBroker(brokerId) {
 
 function create({
   title,
+  description,
   priceAmount,
   priceCurrency,
   categorySlug,
@@ -118,14 +120,15 @@ function create({
 
   return query(
     `INSERT INTO assets (
-       title, price_amount, price_currency, category_slug, status,
+       title, description, price_amount, price_currency, category_slug, status,
        address_line, city, latitude, longitude, attributes, image_url,
        image_urls, posted_label, broker_id, rating, review_count, roi_percent
      )
-     VALUES ($1, $2, $3, $4, $5::asset_status, $6, $7, $8, $9, $10::jsonb, $11, $12::jsonb, $13, $14, $15, $16, $17)
+     VALUES ($1, $2, $3, $4, $5, $6::asset_status, $7, $8, $9, $10, $11::jsonb, $12, $13::jsonb, $14, $15, $16, $17, $18)
      RETURNING *`,
     [
       title,
+      description || null,
       priceAmount,
       priceCurrency || 'ETB',
       categorySlug,
@@ -151,6 +154,7 @@ function create({
  *  patch are touched — this is a partial update, not a full replace. */
 const PATCHABLE_FIELDS = {
   title: { column: 'title', cast: '' },
+  description: { column: 'description', cast: '' },
   priceAmount: { column: 'price_amount', cast: '' },
   priceCurrency: { column: 'price_currency', cast: '' },
   categorySlug: { column: 'category_slug', cast: '' },
