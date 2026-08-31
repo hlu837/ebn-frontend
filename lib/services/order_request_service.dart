@@ -163,6 +163,24 @@ class OrderRequestService {
     return rows.map(OrderRequest.fromJson).toList();
   }
 
+  /// GET all public orders (broadcasting + confirmed + disputed)
+  /// Used for the landing page showcase to show the types of orders/services.
+  Future<List<OrderRequest>> publicOrderList() async {
+    try {
+      final broadcasts = await adminBroadcasting();
+      final confirmed = await adminConfirmed();
+      final disputed = await adminDisputed();
+
+      // Combine all and sort by most recent (submittedAt) descending
+      final all = [...broadcasts, ...confirmed, ...disputed];
+      all.sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
+      return all;
+    } catch (_) {
+      // If any request fails, fall back to broadcasting only
+      return adminBroadcasting();
+    }
+  }
+
   /// POST /api/order-requests/:id/repost — re-broadcasts a disputed
   /// request to nearby agents again (same data, no re-filled form).
   Future<OrderRequest> repost(String id) async {
