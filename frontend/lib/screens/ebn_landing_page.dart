@@ -12,9 +12,11 @@ import 'support_screen.dart';
 import '../models/asset.dart';
 import '../models/auth_response.dart';
 import '../models/company_ad.dart';
+import '../models/order_request.dart';
 import '../models/user_role.dart';
 import '../services/asset_service.dart';
 import '../services/company_ad_service.dart';
+import '../services/order_request_service.dart';
 import '../utils/media_encoding.dart';
 import '../widgets/company_ad_card.dart';
 import '../widgets/order_category_sheet.dart';
@@ -67,6 +69,7 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
 
   final AssetService _assetService = AssetService();
   final CompanyAdService _companyAdService = CompanyAdService();
+  final OrderRequestService _orderRequestService = OrderRequestService();
 
   // Empty until the real `GET /api/assets` response lands — the trending
   // section shows a loading/empty state rather than made-up listings in
@@ -81,11 +84,17 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
   List<CompanyAd> _companyAds = [];
   bool _companyAdsLoading = true;
 
+  // Recent orders placed by users on the platform — loaded from
+  // `/api/order-requests/admin/broadcasting` to show public orders.
+  List<OrderRequest> _orders = [];
+  bool _ordersLoading = true;
+
   @override
   void initState() {
     super.initState();
     _loadAssets();
     _loadCompanyAds();
+    _loadOrders();
   }
 
   Future<void> _loadCompanyAds() async {
@@ -117,6 +126,25 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
       // "no listings" empty state rather than fabricated data.
       if (!mounted) return;
       setState(() => _assetsLoading = false);
+    }
+  }
+
+  Future<void> _loadOrders() async {
+    try {
+      // Fetch all orders (any status) from the platform to showcase
+      // the variety of services offered to new users
+      final orders = await _orderRequestService.publicOrderList();
+      if (!mounted) return;
+      setState(() {
+        // Show only the most recent 4-5 orders as a preview
+        _orders = orders.take(5).toList();
+        _ordersLoading = false;
+      });
+    } on OrderRequestException catch (_) {
+      // Backend down / unreachable — stop the spinner and show the
+      // "no orders" empty state rather than fabricated data.
+      if (!mounted) return;
+      setState(() => _ordersLoading = false);
     }
   }
 
@@ -247,6 +275,9 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
             const SizedBox(height: 24),
             _buildTrendingHeader(),
             _buildTrendingGrid(),
+            const SizedBox(height: 32),
+            _buildOrderListHeader(),
+            _buildOrderListGrid(),
             const SizedBox(height: 32),
             _buildCTASection(),
             const SizedBox(height: 32),
@@ -821,6 +852,84 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
       ),
     );
   }
+
+  // --- Order list section -------------------------------------------
+
+  Widget _buildOrderListHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text(
+            'Order List',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
+          GestureDetector(
+            onTap: () {
+              // TODO: Navigate to full order list page
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('View all orders')),
+              );
+            },
+            child: const Row(
+              children: [
+                Text(
+                  'See all',
+                  style: TextStyle(
+                    color: EBNColors.green,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: EBNColors.green, size: 18),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static const double _kOrderGridSpacing = 16;
+
+  Widget _buildOrderListGrid() {
+    if (_ordersLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 32),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_orders.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: Text(
+          'No orders yet. Be the first to place an order!',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: EBNColors.grey, fontSize: 13),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cardWidth = (constraints.maxWidth - _kOrderGridSpacing) / 2;
+          return Wrap(
+            spacing: _kOrderGridSpacing,
+            runSpacing: 20,
+            children: [
+              for (final order in _orders)
+                SizedBox(
+                  width: cardWidth,
+                  child: _OrderCard(order: order),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1167,5 +1276,185 @@ class _AdCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ORDER CARD WIDGET
+// ---------------------------------------------------------------------------
+
+class _OrderCard extends StatelessWidget {
+  final OrderRequest order;
+  const _OrderCard({required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: EBNColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with category icon and status badge
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+            color: EBNColors.lightGrey,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _getCategoryIcon(order.category),
+                        size: 18,
+                        color: EBNColors.red,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        order.category.label,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(order.status),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: Text(
+                    _getStatusLabel(order.status),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Order details - NO personal info (name, phone, etc)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // What they're looking for
+                Text(
+                  composeOrderRequestTitle(order.category),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Budget info
+                Text(
+                  order.budgetSummary,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: EBNColors.green,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // Location info only - no requester details
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 12,
+                      color: EBNColors.grey,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        _getLocationLabel(order),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: EBNColors.grey,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getCategoryIcon(AssetCategorySlug category) {
+    return switch (category) {
+      AssetCategorySlug.house => Icons.home_outlined,
+      AssetCategorySlug.apartments => Icons.apartment_outlined,
+      AssetCategorySlug.condominium => Icons.apartment_outlined,
+      AssetCategorySlug.building => Icons.domain_outlined,
+      AssetCategorySlug.warehouse => Icons.warehouse_outlined,
+      AssetCategorySlug.vehicles => Icons.directions_car_outlined,
+      AssetCategorySlug.machinery => Icons.terrain_outlined,
+      AssetCategorySlug.constructionMaterials => Icons.storage_outlined,
+      _ => Icons.shopping_bag_outlined,
+    };
+  }
+
+  String _getStatusLabel(OrderRequestStatus status) {
+    return switch (status) {
+      OrderRequestStatus.broadcasting => 'FINDING',
+      OrderRequestStatus.agentConfirmed => 'CONFIRMED',
+      OrderRequestStatus.disputed => 'REPORTED',
+      OrderRequestStatus.closed => 'CLOSED',
+    };
+  }
+
+  Color _getStatusColor(OrderRequestStatus status) {
+    return switch (status) {
+      OrderRequestStatus.broadcasting => EBNColors.red,
+      OrderRequestStatus.agentConfirmed => EBNColors.green,
+      OrderRequestStatus.disputed => Colors.orange,
+      OrderRequestStatus.closed => Colors.grey,
+    };
+  }
+
+  String _getLocationLabel(OrderRequest order) {
+    if (order.addressText != null && order.addressText!.isNotEmpty) {
+      // Extract just the area/city name, not full address
+      final parts = order.addressText!.split(',');
+      return parts.isNotEmpty ? parts[0].trim() : 'Location specified';
+    }
+    return 'GPS location';
   }
 }
