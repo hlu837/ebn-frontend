@@ -83,7 +83,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     'Warehouse',
     'Building',
     'Construction Materials',
-    'Others',
+    'Shop',
     'Real Estate',
     'Broker List',
   ];

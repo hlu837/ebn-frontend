@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -222,6 +223,16 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
     // `loop.stage` above), so this just fires it off and reports any error;
     // success is reflected by the button switching to "Visit Booked".
     final loop = context.read<LoopController>();
+    if (loop.hasActiveCustomerRequest &&
+        loop.requestedAsset?.id != widget.asset.id) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Finish your current visit request before booking another one.'),
+        ),
+      );
+      return;
+    }
     await loop.customerRequest(
       widget.asset,
       customerId: widget.user.id,
@@ -444,7 +455,7 @@ class _AssetDetailScreenState extends State<AssetDetailScreen> {
           padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.sm),
           child: FilledButton(
-            onPressed: hasActiveRequest ? null : () => _requestTour(),
+            onPressed: isThisRequested ? null : () => _requestTour(),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primaryYellow,
               foregroundColor: Colors.white,
@@ -587,7 +598,7 @@ class _HeroImageCarouselState extends State<_HeroImageCarousel> {
   @override
   void didUpdateWidget(covariant _HeroImageCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.imageUrls != widget.imageUrls) {
+    if (!listEquals(oldWidget.imageUrls, widget.imageUrls)) {
       _providers = _buildProviders(widget.imageUrls);
       if (_page >= _providers.length) _page = 0;
     }

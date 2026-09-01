@@ -61,7 +61,7 @@ extension AssetCategorySlugX on AssetCategorySlug {
       case AssetCategorySlug.constructionMaterials:
         return 'Construction Materials';
       case AssetCategorySlug.others:
-        return 'Others';
+        return 'Shop';
     }
   }
 

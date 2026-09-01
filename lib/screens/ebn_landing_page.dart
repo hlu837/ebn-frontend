@@ -45,8 +45,10 @@ class EBNColors {
 class QuickAction {
   final IconData icon;
   final String label;
+  final String? imageUrl;
   final bool highlighted;
-  const QuickAction(this.icon, this.label, {this.highlighted = false});
+  const QuickAction(this.icon, this.label,
+      {this.imageUrl, this.highlighted = false});
 }
 
 // ---------------------------------------------------------------------------
@@ -150,13 +152,25 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
 
   final List<QuickAction> _actions = const [
     QuickAction(Icons.add, 'Post Ad', highlighted: true),
-    QuickAction(Icons.directions_car_outlined, 'Vehicles'),
-    QuickAction(Icons.terrain_outlined, 'Machinery'),
-    QuickAction(Icons.home_outlined, 'House'),
-    QuickAction(Icons.warehouse_outlined, 'Warehouse'),
+    QuickAction(Icons.directions_car_outlined, 'Vehicles',
+        imageUrl:
+            'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=320&q=80'),
+    QuickAction(Icons.terrain_outlined, 'Machinery',
+        imageUrl:
+            'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=320&q=80'),
+    QuickAction(Icons.home_outlined, 'House',
+        imageUrl:
+            'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=320&q=80'),
+    QuickAction(Icons.warehouse_outlined, 'Warehouse',
+        imageUrl:
+            'https://images.unsplash.com/photo-1553413077-190dd305871c?w=320&q=80'),
     QuickAction(Icons.landscape_outlined, 'Land'),
-    QuickAction(Icons.swap_horiz, 'Materials'),
-    QuickAction(Icons.groups_outlined, 'Brokers'),
+    QuickAction(Icons.swap_horiz, 'Materials',
+        imageUrl:
+            'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?w=320&q=80'),
+    QuickAction(Icons.groups_outlined, 'Brokers',
+        imageUrl:
+            'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=320&q=80'),
   ];
 
   void _goToCategory(AssetCategorySlug slug, String label, IconData icon) {
@@ -602,15 +616,28 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
                 Container(
                   width: 52,
                   height: 52,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF0F0EE),
-                    shape: BoxShape.circle,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: action.highlighted
+                        ? EBNColors.red
+                        : const Color(0xFFF0F0EE),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(
-                    action.icon,
-                    color: const Color(0xFF4A4A45),
-                    size: 24,
-                  ),
+                  child: action.imageUrl != null
+                      ? Image.network(
+                          action.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stack) => Icon(
+                            action.icon,
+                            color: const Color(0xFF4A4A45),
+                            size: 24,
+                          ),
+                        )
+                      : Icon(
+                          action.icon,
+                          color: const Color(0xFF4A4A45),
+                          size: 24,
+                        ),
                 ),
                 const SizedBox(height: 8),
                 Text(

@@ -16,7 +16,7 @@ const List<AssetCategory> kAssetCategories = [
   AssetCategory('Warehouse', Icons.warehouse_rounded),
   AssetCategory('Building', Icons.business_rounded),
   AssetCategory('Construction Materials', Icons.construction_rounded),
-  AssetCategory('Others', Icons.category_rounded),
+  AssetCategory('Shop', Icons.category_rounded),
 ];
 
 /// A premium, tap-able category tile used on the landing grid.
