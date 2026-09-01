@@ -38,6 +38,7 @@ class _AgentVisibilityProfileScreenState
   final _imagePicker = ImagePicker();
 
   bool _loading = true;
+  bool _saving = false;
   String? _loadError;
   bool _dirty = false;
   bool _boosted = false;
@@ -122,8 +123,10 @@ class _AgentVisibilityProfileScreenState
   }
 
   Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
     try {
-      await _service.updateProfile(
+      final profile = await _service.updateProfile(
         widget.user.id,
         avatarUrl: _avatarUrl,
         bio: _bio.text.trim(),
@@ -132,11 +135,23 @@ class _AgentVisibilityProfileScreenState
         token: widget.user.token ?? '',
       );
       if (!mounted) return;
-      setState(() => _dirty = false);
+      setState(() {
+        _bio.text = profile.bio;
+        _city.text = profile.city;
+        _avatarUrl = profile.avatarUrl;
+        _specialties
+          ..clear()
+          ..addAll(profile.specialties
+              .map(_slugFromString)
+              .whereType<AssetCategorySlug>());
+        _saving = false;
+        _dirty = false;
+      });
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Profile updated.')));
     } on AgentServiceException catch (e) {
       if (!mounted) return;
+      setState(() => _saving = false);
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(e.message)));
     }
@@ -264,11 +279,18 @@ class _AgentVisibilityProfileScreenState
             style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
         actions: [
           TextButton(
-            onPressed: _dirty ? _save : null,
-            child: Text('Save',
-                style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: _dirty ? AppColors.primaryYellow : Colors.white38)),
+            onPressed: _dirty && !_saving ? _save : null,
+            child: _saving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text('Save',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color:
+                            _dirty ? AppColors.primaryYellow : Colors.white38)),
           ),
         ],
       ),

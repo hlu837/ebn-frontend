@@ -992,42 +992,13 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
               ),
             ),
           ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xl),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: AppSpacing.sm,
-                crossAxisSpacing: AppSpacing.sm,
-                childAspectRatio: 0.60,
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final asset = assets[index];
-                  final favorites = context.watch<FavoritesController>();
-                  return AssetListCard(
-                    asset: asset,
-                    compact: true,
-                    isSaved: favorites.isFavorite(asset.id),
-                    onSaveToggle: (_) =>
-                        context.read<FavoritesController>().toggle(asset.id),
-                    actionLabel: 'View',
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => AssetDetailScreen(
-                        asset: asset,
-                        user: _currentUser,
-                      ),
-                    )),
-                    onActionPressed: () =>
-                        Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => AssetDetailScreen(
-                                  asset: asset,
-                                  user: _currentUser,
-                                ))),
-                  );
-                },
-                childCount: assets.length,
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xl),
+              child: _AgentListingsGrid(
+                assets: assets,
+                user: _currentUser,
               ),
             ),
           ),
@@ -1123,6 +1094,56 @@ class _OrderRequestsSection extends StatelessWidget {
         if (assigned.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sm),
           _ClaimedRequestsSection(requests: assigned),
+        ],
+      ],
+    );
+  }
+}
+
+class _AgentListingsGrid extends StatelessWidget {
+  const _AgentListingsGrid({required this.assets, required this.user});
+
+  final List<Asset> assets;
+  final AppUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    final left = <Asset>[];
+    final right = <Asset>[];
+    for (var i = 0; i < assets.length; i++) {
+      (i.isEven ? left : right).add(assets[i]);
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: _buildColumn(context, left)),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(child: _buildColumn(context, right)),
+      ],
+    );
+  }
+
+  Widget _buildColumn(BuildContext context, List<Asset> columnAssets) {
+    final favorites = context.watch<FavoritesController>();
+    return Column(
+      children: [
+        for (final asset in columnAssets) ...[
+          AssetListCard(
+            asset: asset,
+            compact: true,
+            isSaved: favorites.isFavorite(asset.id),
+            onSaveToggle: (_) =>
+                context.read<FavoritesController>().toggle(asset.id),
+            actionLabel: 'View',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => AssetDetailScreen(asset: asset, user: user),
+            )),
+            onActionPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => AssetDetailScreen(asset: asset, user: user),
+            )),
+          ),
+          const SizedBox(height: AppSpacing.sm),
         ],
       ],
     );
