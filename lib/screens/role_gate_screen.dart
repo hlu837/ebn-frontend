@@ -895,6 +895,7 @@ class _NavLink extends StatelessWidget {
   final String label;
   final VoidCallback? onTap;
   const _NavLink(this.label, {this.onTap});
+
   @override
   Widget build(BuildContext context) {
     final text = Text(

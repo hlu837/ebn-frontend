@@ -271,31 +271,32 @@ class _EBNLandingPageState extends State<EBNLandingPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            _buildHeader(),
-            _buildSafetyBanner(),
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          slivers: [
+            SliverToBoxAdapter(child: _buildHeader()),
+            SliverToBoxAdapter(child: _buildSafetyBanner()),
             if (_companyAdsLoading)
-              const SizedBox.shrink()
+              const SliverToBoxAdapter(child: SizedBox.shrink())
             else if (_companyAds.isNotEmpty)
-              _CompanyAdsCarousel(ads: _companyAds)
+              SliverToBoxAdapter(child: _CompanyAdsCarousel(ads: _companyAds))
             else
-              _buildInspectionBanner(),
-            const SizedBox(height: 24),
-            _buildQuickActions(),
-            const SizedBox(height: 8),
-            _buildOrderSellRow(),
-            const SizedBox(height: 24),
-            _buildTrendingHeader(),
-            _buildTrendingGrid(),
-            const SizedBox(height: 32),
-            _buildOrderListHeader(),
-            _buildOrderListGrid(),
-            const SizedBox(height: 32),
-            _buildCTASection(),
-            const SizedBox(height: 32),
+              SliverToBoxAdapter(child: _buildInspectionBanner()),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            SliverToBoxAdapter(child: _buildQuickActions()),
+            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+            SliverToBoxAdapter(child: _buildOrderSellRow()),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            SliverToBoxAdapter(child: _buildTrendingHeader()),
+            SliverToBoxAdapter(child: _buildTrendingGrid()),
+            const SliverToBoxAdapter(child: SizedBox(height: 32)),
+            SliverToBoxAdapter(child: _buildOrderListHeader()),
+            SliverToBoxAdapter(child: _buildOrderListGrid()),
+            const SliverToBoxAdapter(child: SizedBox(height: 32)),
+            SliverToBoxAdapter(child: _buildCTASection()),
+            const SliverToBoxAdapter(child: SizedBox(height: 32)),
           ],
         ),
       ),

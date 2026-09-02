@@ -36,7 +36,7 @@ class _AgentListingEditScreenState extends State<AgentListingEditScreen> {
   late TextEditingController _addressController;
 
   List<String> _imageUrls = [];
-  List<XFile> _newImages = [];
+  final List<XFile> _newImages = [];
   bool _isSaving = false;
 
   @override
