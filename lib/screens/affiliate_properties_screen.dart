@@ -1,0 +1,468 @@
+import 'package:flutter/material.dart';
+import '../models/asset.dart';
+import '../models/auth_response.dart';
+import '../services/asset_service.dart';
+import '../theme/app_theme.dart';
+import '../utils/media_encoding.dart';
+import '../widgets/app_buttons.dart';
+import 'affiliate_earnings_screen.dart';
+import 'affiliate_referrals_screen.dart';
+import 'affiliater_home_screen.dart';
+
+const _kAccentRed = AppColors.primaryYellow;
+
+/// Full, searchable/filterable catalog of shareable listings for the
+/// Affiliater role — the "View All" / "Assets" destination the dashboard's
+/// Top Properties rail only shows a preview of.
+class AffiliatePropertiesScreen extends StatefulWidget {
+  const AffiliatePropertiesScreen({super.key, required this.user});
+
+  final AppUser user;
+
+  @override
+  State<AffiliatePropertiesScreen> createState() =>
+      _AffiliatePropertiesScreenState();
+}
+
+class _AffiliatePropertiesScreenState extends State<AffiliatePropertiesScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+  AssetCategorySlug? _category;
+
+  final AssetService _assetService = AssetService();
+
+  List<Asset> _allAssets = [];
+  bool _loading = true;
+  bool _loadFailed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAssets();
+  }
+
+  Future<void> _loadAssets() async {
+    setState(() {
+      _loading = true;
+      _loadFailed = false;
+    });
+    try {
+      final assets = await _assetService.fetchAssets(limit: 200);
+      if (!mounted) return;
+      setState(() {
+        _allAssets = assets;
+        _loading = false;
+      });
+    } on AssetException catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadFailed = true;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<Asset> get _filtered {
+    var list = _allAssets.where((a) => a.status == AssetStatus.active);
+    if (_category != null) {
+      list = list.where((a) => a.category == _category);
+    }
+    if (_query.trim().isNotEmpty) {
+      final q = _query.trim().toLowerCase();
+      list = list.where((a) =>
+          a.title.toLowerCase().contains(q) ||
+          (a.city ?? '').toLowerCase().contains(q));
+    }
+    return list.toList();
+  }
+
+  void _generateLink(Asset asset) {
+    AppToast.showSuccess(
+        context, 'Referral link generated for "${asset.title}".');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filtered;
+    final categories = _allAssets.map((a) => a.category).toSet().toList();
+
+    return Scaffold(
+      backgroundColor: AppColors.cloud,
+      appBar: AppBar(
+        backgroundColor: AppColors.cloud,
+        foregroundColor: AppColors.ink,
+        title: const Text('Properties',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (v) => setState(() => _query = v),
+              decoration: InputDecoration(
+                hintText: 'Search homes, vehicles, machinery...',
+                prefixIcon:
+                    const Icon(Icons.search_rounded, color: AppColors.slate),
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadii.md),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadii.md),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadii.md),
+                  borderSide: const BorderSide(
+                      color: AppColors.primaryYellow, width: 2),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              children: [
+                _CategoryChip(
+                    label: 'All',
+                    active: _category == null,
+                    onTap: () => setState(() => _category = null)),
+                const SizedBox(width: AppSpacing.sm),
+                ...categories.map((c) => Padding(
+                      padding: const EdgeInsets.only(right: AppSpacing.sm),
+                      child: _CategoryChip(
+                        label: c.label,
+                        active: _category == c,
+                        onTap: () => setState(() => _category = c),
+                      ),
+                    )),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _loadFailed
+                    ? _LoadFailed(onRetry: _loadAssets)
+                    : filtered.isEmpty
+                        ? const _EmptyProperties()
+                        : GridView.builder(
+                            padding: const EdgeInsets.fromLTRB(AppSpacing.lg,
+                                0, AppSpacing.lg, AppSpacing.xl),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              mainAxisSpacing: AppSpacing.md,
+                              crossAxisSpacing: AppSpacing.md,
+                              childAspectRatio: 0.60,
+                            ),
+                            itemCount: filtered.length,
+                            itemBuilder: (context, i) => _PropertyGridCard(
+                              asset: filtered[i],
+                              onGenerateLink: () => _generateLink(filtered[i]),
+                            ),
+                          ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: _AffiliateBottomNav(
+        current: 1,
+        user: widget.user,
+      ),
+    );
+  }
+}
+
+class _AffiliateBottomNav extends StatelessWidget {
+  const _AffiliateBottomNav({required this.current, required this.user});
+
+  final int current;
+  final AppUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.only(top: 6, bottom: 6),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _AffiliateNavItem(
+              icon: Icons.home_outlined,
+              activeIcon: Icons.home_rounded,
+              label: 'Home',
+              active: current == 0,
+              onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                      builder: (_) => AffiliaterHomeScreen(user: user))),
+            ),
+            _AffiliateNavItem(
+              icon: Icons.holiday_village_outlined,
+              activeIcon: Icons.holiday_village_rounded,
+              label: 'Properties',
+              active: current == 1,
+              onTap: () {},
+            ),
+            _AffiliateNavItem(
+              icon: Icons.account_balance_wallet_outlined,
+              activeIcon: Icons.account_balance_wallet_rounded,
+              label: 'Wallet',
+              active: current == 2,
+              onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                      builder: (_) => AffiliateEarningsScreen(
+                          user: user, token: user.token ?? ''))),
+            ),
+            _AffiliateNavItem(
+              icon: Icons.groups_outlined,
+              activeIcon: Icons.groups_rounded,
+              label: 'Referrals',
+              active: current == 3,
+              onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                      builder: (_) => AffiliateReferralsScreen(
+                          user: user, token: user.token ?? ''))),
+            ),
+            _AffiliateNavItem(
+              icon: Icons.more_horiz_rounded,
+              activeIcon: Icons.more_horiz_rounded,
+              label: 'More',
+              active: current == 4,
+              onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                      builder: (_) => AffiliaterHomeScreen(user: user))),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AffiliateNavItem extends StatelessWidget {
+  const _AffiliateNavItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(active ? activeIcon : icon,
+              size: 22,
+              color: active ? AppColors.primaryYellow : AppColors.slate),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+              color: active ? AppColors.primaryYellow : AppColors.slate,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryChip extends StatelessWidget {
+  const _CategoryChip(
+      {required this.label, required this.active, required this.onTap});
+
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadii.pill),
+      child: Container(
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: active ? _kAccentRed : AppColors.card,
+          borderRadius: BorderRadius.circular(AppRadii.pill),
+          border: Border.all(color: active ? _kAccentRed : AppColors.border),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: active ? Colors.white : AppColors.slate),
+        ),
+      ),
+    );
+  }
+}
+
+class _PropertyGridCard extends StatelessWidget {
+  const _PropertyGridCard({required this.asset, required this.onGenerateLink});
+
+  final Asset asset;
+  final VoidCallback onGenerateLink;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppRadii.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AspectRatio(
+            aspectRatio: 16 / 11,
+            child: dataUrlOrNetworkImage(asset.imageUrl) != null
+                ? Image(image: dataUrlOrNetworkImage(asset.imageUrl)!,
+                    fit: BoxFit.cover, width: double.infinity)
+                : Container(color: AppColors.border),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(asset.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink)),
+                const SizedBox(height: 2),
+                Text(asset.city ?? '—',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.slate)),
+                const SizedBox(height: 4),
+                Text(asset.formattedPrice,
+                    style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        color: _kAccentRed)),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 32,
+                  child: ElevatedButton(
+                    onPressed: onGenerateLink,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _kAccentRed.withValues(alpha: 0.1),
+                      foregroundColor: _kAccentRed,
+                      elevation: 0,
+                      padding: EdgeInsets.zero,
+                      textStyle: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w700),
+                    ),
+                    child: const Text('Generate Link'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoadFailed extends StatelessWidget {
+  const _LoadFailed({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_outlined,
+                size: 40, color: AppColors.slate),
+            const SizedBox(height: AppSpacing.md),
+            const Text("Couldn't load properties.",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, color: AppColors.ink)),
+            const SizedBox(height: AppSpacing.md),
+            TextButton(
+              onPressed: onRetry,
+              child: const Text('Retry',
+                  style: TextStyle(
+                      color: _kAccentRed, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyProperties extends StatelessWidget {
+  const _EmptyProperties();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.holiday_village_outlined,
+                size: 40, color: AppColors.slate),
+            SizedBox(height: AppSpacing.md),
+            Text('No properties match your search.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, color: AppColors.ink)),
+          ],
+        ),
+      ),
+    );
+  }
+}
