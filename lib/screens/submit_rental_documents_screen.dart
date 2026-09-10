@@ -271,7 +271,7 @@ class _DocThumb extends StatelessWidget {
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(10),
-          child: Image.memory(Uint8ListFrom(doc.bytes), width: 84, height: 84, fit: BoxFit.cover),
+          child: Image.memory(doc.bytes, width: 84, height: 84, fit: BoxFit.cover),
         ),
         Positioned(top: 4, right: 4, child: _RemoveButton(onTap: onRemove, size: 18)),
       ],
@@ -298,8 +298,3 @@ class _RemoveButton extends StatelessWidget {
     );
   }
 }
-
-// Small helper so this file doesn't need a direct `dart:typed_data` import
-// just for one cast.
-// ignore: non_constant_identifier_names
-List<int> Uint8ListFrom(List<int> bytes) => bytes;
