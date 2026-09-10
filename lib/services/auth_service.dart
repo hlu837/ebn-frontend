@@ -92,8 +92,10 @@ class AuthService {
     if (res['isPendingPayment'] == true) {
       AppUser? user;
       if (res['user'] is Map<String, dynamic>) {
-        user = AppUser.fromJson(res['user'] as Map<String, dynamic>,
-            token: res['token'] as String?);
+        user = AppUser.fromJson(
+          res['user'] as Map<String, dynamic>,
+          token: res['token'] as String?,
+        );
       }
       throw AuthException(
         res['message'] as String? ?? 'Payment required for activation.',
@@ -104,21 +106,43 @@ class AuthService {
       );
     }
 
-    return AppUser.fromJson(res['user'] as Map<String, dynamic>,
-        token: res['token'] as String?);
+    if (res['isPendingApproval'] == true) {
+      AppUser? user;
+      if (res['user'] is Map<String, dynamic>) {
+        user = AppUser.fromJson(
+          res['user'] as Map<String, dynamic>,
+          token: res['token'] as String?,
+        );
+      }
+      throw AuthException(
+        'Account created — it is waiting on admin approval.',
+        accountStatus: 'pending_approval',
+        pendingRole: requestedRole ?? 'property_owner',
+        user: user,
+      );
+    }
+
+    return AppUser.fromJson(
+      res['user'] as Map<String, dynamic>,
+      token: res['token'] as String?,
+    );
   }
 
   /// POST /api/auth/signin — plain email + password login. Used by the
   /// public smart-router [LoginScreen]; whatever role the account was
   /// saved under is returned so the caller can route accordingly.
-  Future<AppUser> login(
-      {required String email, required String password}) async {
+  Future<AppUser> login({
+    required String email,
+    required String password,
+  }) async {
     final res = await _post('/api/auth/signin', {
       'email': email.trim(),
       'password': password,
     });
-    return AppUser.fromJson(res['user'] as Map<String, dynamic>,
-        token: res['token'] as String?);
+    return AppUser.fromJson(
+      res['user'] as Map<String, dynamic>,
+      token: res['token'] as String?,
+    );
   }
 
   /// Explicit-role sign in — used only by the Admin portal. Authenticates
@@ -151,9 +175,10 @@ class AuthService {
     required double latitude,
     required double longitude,
   }) async {
-    final res = await _patch(
-        '/api/auth/me/location', {'latitude': latitude, 'longitude': longitude},
-        token: token);
+    final res = await _patch('/api/auth/me/location', {
+      'latitude': latitude,
+      'longitude': longitude,
+    }, token: token);
     return AppUser.fromJson(res['user'] as Map<String, dynamic>, token: token);
   }
 
@@ -162,9 +187,10 @@ class AuthService {
   /// actually stops findNearbyAgents from broadcasting new requests to this
   /// agent, since there's no separate online/offline flag on the backend.
   Future<AppUser> clearAgentLocation({required String token}) async {
-    final res = await _patch(
-        '/api/auth/me/location', {'latitude': null, 'longitude': null},
-        token: token);
+    final res = await _patch('/api/auth/me/location', {
+      'latitude': null,
+      'longitude': null,
+    }, token: token);
     return AppUser.fromJson(res['user'] as Map<String, dynamic>, token: token);
   }
 
@@ -175,13 +201,10 @@ class AuthService {
     String? fullName,
     String? phone,
   }) async {
-    final res = await _patch(
-        '/api/auth/me',
-        {
-          if (fullName != null) 'fullName': fullName,
-          if (phone != null) 'phone': phone,
-        },
-        token: token);
+    final res = await _patch('/api/auth/me', {
+      if (fullName != null) 'fullName': fullName,
+      if (phone != null) 'phone': phone,
+    }, token: token);
     return AppUser.fromJson(res['user'] as Map<String, dynamic>, token: token);
   }
 
@@ -191,13 +214,17 @@ class AuthService {
     final cleaned = token?.trim();
     if (cleaned == null || cleaned.isEmpty) {
       throw const AuthException(
-          'Your session has expired. Please sign in again.');
+        'Your session has expired. Please sign in again.',
+      );
     }
     return cleaned;
   }
 
-  Future<Map<String, dynamic>> _patch(String path, Map<String, dynamic> body,
-      {String? token}) async {
+  Future<Map<String, dynamic>> _patch(
+    String path,
+    Map<String, dynamic> body, {
+    String? token,
+  }) async {
     http.Response res;
     final authToken = token == null ? null : _requireToken(token);
     try {
@@ -213,23 +240,29 @@ class AuthService {
           .timeout(const Duration(seconds: 15));
     } catch (_) {
       throw const AuthException(
-          "Couldn't reach the server. Check your connection and try again.");
+        "Couldn't reach the server. Check your connection and try again.",
+      );
     }
     return _decode(res);
   }
 
   Future<Map<String, dynamic>> _post(
-      String path, Map<String, dynamic> body) async {
+    String path,
+    Map<String, dynamic> body,
+  ) async {
     http.Response res;
     try {
       res = await http
-          .post(_uri(path),
-              headers: const {'Content-Type': 'application/json'},
-              body: jsonEncode(body))
+          .post(
+            _uri(path),
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
           .timeout(const Duration(seconds: 15));
     } catch (_) {
       throw const AuthException(
-          "Couldn't reach the server. Check your connection and try again.");
+        "Couldn't reach the server. Check your connection and try again.",
+      );
     }
     return _decode(res);
   }
@@ -238,13 +271,18 @@ class AuthService {
     http.Response res;
     final authToken = token == null ? null : _requireToken(token);
     try {
-      res = await http.get(
-        _uri(path),
-        headers: {if (authToken != null) 'Authorization': 'Bearer $authToken'},
-      ).timeout(const Duration(seconds: 15));
+      res = await http
+          .get(
+            _uri(path),
+            headers: {
+              if (authToken != null) 'Authorization': 'Bearer $authToken',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
     } catch (_) {
       throw const AuthException(
-          "Couldn't reach the server. Check your connection and try again.");
+        "Couldn't reach the server. Check your connection and try again.",
+      );
     }
     return _decode(res);
   }
@@ -259,8 +297,10 @@ class AuthService {
     if (res.statusCode < 200 || res.statusCode >= 300) {
       AppUser? user;
       if (json['user'] is Map<String, dynamic>) {
-        user = AppUser.fromJson(json['user'] as Map<String, dynamic>,
-            token: json['token'] as String?);
+        user = AppUser.fromJson(
+          json['user'] as Map<String, dynamic>,
+          token: json['token'] as String?,
+        );
       }
       throw AuthException(
         json['error'] as String? ?? 'Something went wrong (${res.statusCode}).',

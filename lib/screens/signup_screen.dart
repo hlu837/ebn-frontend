@@ -79,7 +79,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
         email: _emailCtrl.text.trim(),
         password: _passwordCtrl.text,
         phone: _phoneCtrl.text.trim(),
-        role: (_role == UserRole.agent ||
+        role:
+            (_role == UserRole.agent ||
                 _role == UserRole.investor ||
                 _role == UserRole.propertyOwner)
             ? UserRole.user
@@ -91,14 +92,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
             ? null
             : _referralCtrl.text,
         agentReferralCode: _role == UserRole.agent ? _referralCtrl.text : null,
-        investorReferralCode:
-            _role == UserRole.investor ? _referralCtrl.text : null,
+        investorReferralCode: _role == UserRole.investor
+            ? _referralCtrl.text
+            : null,
         // Property Owner has no payment step, but it's still an
         // admin-gated role — same requestedRole contract the backend
         // already uses for Agent/Investor (see auth.js's
         // PENDING_APPROVAL_ROLES), just without a membership plan screen
         // afterward.
-        requestedRole: (_role == UserRole.agent ||
+        requestedRole:
+            (_role == UserRole.agent ||
                 _role == UserRole.investor ||
                 _role == UserRole.propertyOwner)
             ? _role.apiValue
@@ -126,7 +129,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
 
       AppToast.showSuccess(
-          context, 'Welcome, ${user.fullName.split(' ').first}!');
+        context,
+        'Welcome, ${user.fullName.split(' ').first}!',
+      );
 
       final pendingStore = context.read<PendingFormStore>();
       if (pendingStore.hasPending) {
@@ -145,10 +150,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
         } else {
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(
-              builder: (_) => SellPropertyFormScreen(
-                user: user,
-                resumeAfterAuth: true,
-              ),
+              builder: (_) =>
+                  SellPropertyFormScreen(user: user, resumeAfterAuth: true),
             ),
             (route) => false,
           );
@@ -157,20 +160,28 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
 
       if (_role == UserRole.agent) {
-        AppToast.showInfo(context, 'Please complete payment to activate your Agent account.');
+        AppToast.showInfo(
+          context,
+          'Please complete payment to activate your Agent account.',
+        );
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
-              builder: (_) => AgentMembershipPlanSelectScreen(user: user)),
+            builder: (_) => AgentMembershipPlanSelectScreen(user: user),
+          ),
           (route) => false,
         );
         return;
       }
 
       if (_role == UserRole.investor) {
-        AppToast.showInfo(context, 'Please complete payment to activate your Investor account.');
+        AppToast.showInfo(
+          context,
+          'Please complete payment to activate your Investor account.',
+        );
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
-              builder: (_) => InvestorMembershipPlanSelectScreen(user: user)),
+            builder: (_) => InvestorMembershipPlanSelectScreen(user: user),
+          ),
           (route) => false,
         );
         return;
@@ -184,6 +195,32 @@ class _SignUpScreenState extends State<SignUpScreen> {
       );
     } on AuthException catch (e) {
       if (!mounted) return;
+
+      if (e.accountStatus == 'pending_approval' && e.user != null) {
+        final targetRole = e.pendingRole == 'agent'
+            ? UserRole.agent
+            : e.pendingRole == 'investor'
+            ? UserRole.investor
+            : e.pendingRole == 'property_owner'
+            ? UserRole.propertyOwner
+            : _role;
+
+        AppToast.showInfo(
+          context,
+          "Account created — it's now waiting on admin approval.",
+        );
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => VerificationPendingScreen(
+              user: e.user!,
+              targetRole: targetRole,
+            ),
+          ),
+          (route) => false,
+        );
+        return;
+      }
+
       if (e.accountStatus == 'pending_payment') {
         // Determine the target paid role: prefer e.pendingRole from the backend
         // (which is set when the backend's new guard fires and blocks plain-user
@@ -191,15 +228,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
         final targetRole = e.pendingRole == 'agent'
             ? UserRole.agent
             : e.pendingRole == 'investor'
-                ? UserRole.investor
-                : _role;
+            ? UserRole.investor
+            : _role;
 
-        final userToPass = e.user ?? AppUser(
-          id: '',
-          fullName: _nameCtrl.text.trim(),
-          email: _emailCtrl.text.trim(),
-          role: targetRole,
-        );
+        final userToPass =
+            e.user ??
+            AppUser(
+              id: '',
+              fullName: _nameCtrl.text.trim(),
+              email: _emailCtrl.text.trim(),
+              role: targetRole,
+            );
 
         if (targetRole == UserRole.agent) {
           AppToast.showInfo(
@@ -208,10 +247,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
           );
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(
-                builder: (_) => AgentMembershipPlanSelectScreen(
-                      user: userToPass,
-                      pendingUserPayload: e.pendingUserData,
-                    )),
+              builder: (_) => AgentMembershipPlanSelectScreen(
+                user: userToPass,
+                pendingUserPayload: e.pendingUserData,
+              ),
+            ),
             (route) => false,
           );
           return;
@@ -222,10 +262,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
           );
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(
-                builder: (_) => InvestorMembershipPlanSelectScreen(
-                      user: userToPass,
-                      pendingUserPayload: e.pendingUserData,
-                    )),
+              builder: (_) => InvestorMembershipPlanSelectScreen(
+                user: userToPass,
+                pendingUserPayload: e.pendingUserData,
+              ),
+            ),
             (route) => false,
           );
           return;
@@ -247,7 +288,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.xl),
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            AppSpacing.xl,
+          ),
           child: Form(
             key: _formKey,
             child: Column(
@@ -256,40 +301,50 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 Row(
                   children: [
                     Expanded(
-                        child: Text(_role.signupHeadline,
-                            style: textTheme.displayLarge
-                                ?.copyWith(fontSize: 28))),
+                      child: Text(
+                        _role.signupHeadline,
+                        style: textTheme.displayLarge?.copyWith(fontSize: 28),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 6),
-                Text(_role.signupSubtitle,
-                    style:
-                        textTheme.bodyLarge?.copyWith(color: AppColors.slate)),
+                Text(
+                  _role.signupSubtitle,
+                  style: textTheme.bodyLarge?.copyWith(color: AppColors.slate),
+                ),
                 const SizedBox(height: 8),
                 GestureDetector(
                   onTap: _isLoading
                       ? null
                       : () => Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(
-                                builder: (_) =>
-                                    RoleSelectScreen(initialRole: _role)),
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                RoleSelectScreen(initialRole: _role),
                           ),
+                        ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(_role.pitchIcon, size: 15, color: AppColors.slate),
                       const SizedBox(width: 6),
-                      Text('Signing up as ${_role.label}',
-                          style: const TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.slate)),
+                      Text(
+                        'Signing up as ${_role.label}',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.slate,
+                        ),
+                      ),
                       const SizedBox(width: 6),
-                      const Text('· Change',
-                          style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.ink)),
+                      const Text(
+                        '· Change',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.ink,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -300,7 +355,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   controller: _nameCtrl,
                   textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(
-                      labelText: 'Full Name', hintText: 'Jordan Rivera'),
+                    labelText: 'Full Name',
+                    hintText: 'Jordan Rivera',
+                  ),
                   validator: Validators.fullName,
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -309,7 +366,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(
-                      labelText: 'Email', hintText: 'you@example.com'),
+                    labelText: 'Email',
+                    hintText: 'you@example.com',
+                  ),
                   validator: Validators.email,
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -318,7 +377,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   controller: _phoneCtrl,
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
-                      labelText: 'Phone', hintText: '+1 555 123 4567'),
+                    labelText: 'Phone',
+                    hintText: '+1 555 123 4567',
+                  ),
                   validator: Validators.phone,
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -330,9 +391,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     labelText: 'Password',
                     hintText: 'At least 6 characters',
                     suffixIcon: IconButton(
-                      icon: Icon(_obscurePassword
-                          ? Icons.visibility_off_rounded
-                          : Icons.visibility_rounded),
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off_rounded
+                            : Icons.visibility_rounded,
+                      ),
                       onPressed: () =>
                           setState(() => _obscurePassword = !_obscurePassword),
                     ),
@@ -350,14 +413,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       labelText: 'Agency Name / License-ID Number',
                       hintText: 'e.g. Meridian Realty · LIC-88213',
                     ),
-                    validator: (v) => Validators.notEmpty(v,
-                        label: 'Agency name or license number'),
+                    validator: (v) => Validators.notEmpty(
+                      v,
+                      label: 'Agency name or license number',
+                    ),
                   ),
                   const SizedBox(height: 6),
                   const Text(
                     "We'll verify this before your listings go live — it's how we keep the marketplace trustworthy.",
                     style: TextStyle(
-                        fontSize: 11.5, color: AppColors.slate, height: 1.4),
+                      fontSize: 11.5,
+                      color: AppColors.slate,
+                      height: 1.4,
+                    ),
                   ),
                 ],
 
@@ -377,7 +445,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     "No listing fee, and you can post and manage rentals directly — just like an Agent. "
                     "An admin reviews new Property Owner accounts before the workspace unlocks.",
                     style: TextStyle(
-                        fontSize: 11.5, color: AppColors.slate, height: 1.4),
+                      fontSize: 11.5,
+                      color: AppColors.slate,
+                      height: 1.4,
+                    ),
                   ),
                 ],
 
@@ -389,13 +460,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     labelText: _role == UserRole.agent
                         ? 'Agent Network Code (optional)'
                         : _role == UserRole.investor
-                            ? 'Investor Referral Code (optional)'
-                            : 'Referral Code / Link (optional)',
+                        ? 'Investor Referral Code (optional)'
+                        : 'Referral Code / Link (optional)',
                     hintText: _role == UserRole.agent
                         ? 'e.g. AGT-4F82K — from an agent who invited you'
                         : _role == UserRole.investor
-                            ? 'e.g. INV-4F82K — from an investor who invited you'
-                            : 'e.g. EBN-4F82K',
+                        ? 'e.g. INV-4F82K — from an investor who invited you'
+                        : 'e.g. EBN-4F82K',
                     filled: _referralWasAutoFilled,
                     fillColor: AppColors.primaryYellow.withOpacity(0.12),
                   ),
@@ -404,20 +475,24 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.link_rounded,
-                          size: 14, color: AppColors.slate),
+                      const Icon(
+                        Icons.link_rounded,
+                        size: 14,
+                        color: AppColors.slate,
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           _role == UserRole.agent
                               ? "You came from another agent's network link — they'll be your sponsor and earn a share of your commissions."
                               : _role == UserRole.investor
-                                  ? "You came from another investor's referral link — they'll earn a reward once your first commitment is confirmed."
-                                  : "You came from an affiliater's link — they'll get credit for this signup.",
+                              ? "You came from another investor's referral link — they'll earn a reward once your first commitment is confirmed."
+                              : "You came from an affiliater's link — they'll get credit for this signup.",
                           style: const TextStyle(
-                              fontSize: 11.5,
-                              color: AppColors.slate,
-                              height: 1.4),
+                            fontSize: 11.5,
+                            color: AppColors.slate,
+                            height: 1.4,
+                          ),
                         ),
                       ),
                     ],
@@ -427,9 +502,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 const SizedBox(height: AppSpacing.xl),
 
                 PrimaryButton(
-                    label: 'Create Account',
-                    isLoading: _isLoading,
-                    onPressed: _submit),
+                  label: 'Create Account',
+                  isLoading: _isLoading,
+                  onPressed: _submit,
+                ),
 
                 const SizedBox(height: AppSpacing.lg),
 
@@ -438,19 +514,22 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     onTap: _isLoading
                         ? null
                         : () => Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(
-                                  builder: (_) => const LoginScreen()),
+                            MaterialPageRoute(
+                              builder: (_) => const LoginScreen(),
                             ),
+                          ),
                     child: RichText(
                       text: TextSpan(
                         style: textTheme.bodyMedium,
                         children: const [
                           TextSpan(text: 'Already have an account?  '),
                           TextSpan(
-                              text: 'Sign In',
-                              style: TextStyle(
-                                  color: AppColors.ink,
-                                  fontWeight: FontWeight.w800)),
+                            text: 'Sign In',
+                            style: TextStyle(
+                              color: AppColors.ink,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -466,8 +545,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
 }
 
 class _CheckboxRow extends StatelessWidget {
-  const _CheckboxRow(
-      {required this.value, required this.onChanged, required this.label});
+  const _CheckboxRow({
+    required this.value,
+    required this.onChanged,
+    required this.label,
+  });
 
   final bool value;
   final ValueChanged<bool> onChanged;
@@ -483,10 +565,13 @@ class _CheckboxRow extends StatelessWidget {
         onTap: () => onChanged(!value),
         child: Container(
           padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
           decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppRadii.md),
-              border: Border.all(color: AppColors.border)),
+            borderRadius: BorderRadius.circular(AppRadii.md),
+            border: Border.all(color: AppColors.border),
+          ),
           child: Row(
             children: [
               Checkbox(
@@ -496,12 +581,15 @@ class _CheckboxRow extends StatelessWidget {
                 checkColor: AppColors.primaryYellow,
               ),
               Expanded(
-                child: Text(label,
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.ink,
-                        height: 1.3)),
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
+                    height: 1.3,
+                  ),
+                ),
               ),
             ],
           ),
