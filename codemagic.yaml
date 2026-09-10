@@ -1,0 +1,28 @@
+workflows:
+  android-workflow:
+    name: Android Build
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      vars:
+        # Override in the Codemagic UI (Workflow > Environment variables) if
+        # your Vercel backend domain differs from the compiled-in default in
+        # lib/config/api_config.dart. Leave unset to use that default.
+        API_BASE_URL: ""
+    scripts:
+      - name: Set up local.properties
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+      - name: Get Flutter packages
+        script: |
+          flutter pub get
+      - name: Build Android APK
+        script: |
+          if [ -n "$API_BASE_URL" ]; then
+            flutter build apk --release --dart-define=API_BASE_URL="$API_BASE_URL"
+          else
+            flutter build apk --release
+          fi
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
