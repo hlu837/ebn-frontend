@@ -1,8 +1,8 @@
-import 'chat_message.dart' as chat;
-
 /// Mirrors the JSON shape returned by `/api/property-requests/*` on the
 /// real backend (`backend/src/models/propertyRequests.js` → `toPublic`).
 library;
+
+import 'chat_message.dart' as chat;
 
 enum PropertyRequestType { info, tour, rentNow }
 
